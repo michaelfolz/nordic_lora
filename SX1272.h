@@ -45,7 +45,6 @@
 // added by C. Pham
 #define W_REQUESTED_ACK
 //#define W_NET_KEY
-//#define W_INITIALIZATION
 #define SX1272_RST  3
 
 //#if defined ARDUINO_AVR_PRO || defined ARDUINO_AVR_NANO || defined ARDUINO_AVR_MINI || defined __MK20DX256__
@@ -1148,6 +1147,8 @@ public:
     int8_t setSyncWord(uint8_t sw);
     int8_t getSyncWord();
     int8_t setSleepMode();
+
+    int8_t writeReadRegister(byte address, byte data);
 
     // SX1272 or SX1276?
     uint8_t _board;
