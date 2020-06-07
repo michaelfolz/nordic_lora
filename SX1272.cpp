@@ -214,59 +214,6 @@ uint8_t SX1272::setLORA()
 }
 
 
-
-/*
- Function: Gets the bandwidth, coding rate and spreading factor of the LoRa modulation.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-uint8_t SX1272::getMode()
-{
-    byte st0;
-    int8_t state = 2;
-    byte value = 0x00;
-
-    st0 = readRegister(REG_OP_MODE);        // Save the previous status
- 
-    value = readRegister(REG_MODEM_CONFIG1);
-    // added by C. Pham
-    if (_board==SX1272Chip) {
-        _bandwidth = (value >> 6);              // Storing 2 MSB from REG_MODEM_CONFIG1 (=_bandwidth)
-        // added by C. Pham
-        // convert to common bandwidth values used by both SX1272 and SX1276
-        _bandwidth += 7;
-    }
-    else
-        _bandwidth = (value >> 4);              // Storing 4 MSB from REG_MODEM_CONFIG1 (=_bandwidth)
-
-    if (_board==SX1272Chip)
-        _codingRate = (value >> 3) & 0x07;          // Storing third, forth and fifth bits from
-    else
-        _codingRate = (value >> 1) & 0x07;          // Storing 3-1 bits REG_MODEM_CONFIG1 (=_codingRate)
-
-    value = readRegister(REG_MODEM_CONFIG2);
-    _spreadingFactor = (value >> 4) & 0x0F;     // Storing 4 MSB from REG_MODEM_CONFIG2 (=_spreadingFactor)
-    state = 1;
-
-    if( isBW(_bandwidth) )      // Checking available values for:
-    {                               //      _bandwidth
-        if( isCR(_codingRate) )     //      _codingRate
-        {                           //      _spreadingFactor
-            if( isSF(_spreadingFactor) )
-            {
-                state = 0;
-            }
-        }
-    }
-
-    writeRegister(REG_OP_MODE, st0);    // Getting back to previous status
-    delay(100);
-    return state;
-}
-
-
 int8_t SX1272::setMode(uint8_t mode)
 {
     int8_t error = 0;
@@ -2026,30 +1973,7 @@ int16_t SX1272::getRSSIpacket()
     return state;
 }
 
-/*
- Function: It sets the maximum number of retries.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-   state = -1 -->
-*/
-uint8_t SX1272::setRetries(uint8_t ret)
-{
-    uint8_t state = 2;
 
-    state = 1;
-    if( ret > MAX_RETRIES )
-    {
-        state = -1;
-    }
-    else
-    {
-        _maxRetries = ret;
-        state = 0;
-    }
-    return state;
-}
 
 /*
  Function: Gets the current supply limit of the power amplifier, protecting battery chemistries.
@@ -2600,40 +2524,8 @@ int8_t SX1272::getPacket(uint16_t wait)
         }
         //writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);    // Setting standby LoRa mode
     }
-    else
-    { // FSK mode
-        value = readRegister(REG_IRQ_FLAGS2);
-        while( (bitRead(value, 2) == 0) && (millis() - previous < wait) )
-        {
-            value = readRegister(REG_IRQ_FLAGS2);
-            // Condition to avoid an overflow (DO NOT REMOVE)
-            if( millis() < previous )
-            {
-                previous = millis();
-            }
-        } // end while (millis)
-        if( bitRead(value, 2) == 1 )
-        { // packet received
-            if( bitRead(value, 1) == 1 )
-            { // CRC correct
-                _reception = CORRECT_PACKET;
-                p_received = true;
 
-            }
-            else
-            { // CRC incorrect
-                _reception = INCORRECT_PACKET;
-                state = 3;
-                p_received = false;
 
-            }
-        }
-        else
-        {
-
-        }
-        writeRegister(REG_OP_MODE, FSK_STANDBY_MODE);   // Setting standby FSK mode
-    }
     if( p_received == true )
     {
         // Store the packet
@@ -2716,6 +2608,7 @@ int8_t SX1272::getPacket(uint16_t wait)
 
         }
     }
+
     if( _modem == LORA )
     {
         writeRegister(REG_FIFO_ADDR_PTR, 0x00);  // Setting address pointer in FIFO data buffer
@@ -2742,9 +2635,6 @@ int8_t SX1272::getPacket(uint16_t wait)
 int8_t SX1272::setDestination(uint8_t dest)
 {
     int8_t state = 2;
-
-
-
     state = 1;
     _destination = dest; // Storing destination in a global variable
     packet_sent.dst = dest;  // Setting destination in packet structure
@@ -2756,344 +2646,6 @@ int8_t SX1272::setDestination(uint8_t dest)
     return state;
 }
 
-/*
- Function: It sets the timeout according to the configured mode.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-uint8_t SX1272::setTimeout()
-{
-    uint8_t state = 2;
-    uint16_t delay;
-
-    state = 1;
-    if( _modem == LORA )
-    {
-        switch(_spreadingFactor)
-        {   // Choosing Spreading Factor
-        case SF_6:  switch(_bandwidth)
-            {   // Choosing bandwidth
-            case BW_125:
-                switch(_codingRate)
-                {   // Choosing coding rate
-                case CR_5: _sendTime = 335;
-                    break;
-                case CR_6: _sendTime = 352;
-                    break;
-                case CR_7: _sendTime = 368;
-                    break;
-                case CR_8: _sendTime = 386;
-                    break;
-                }
-                break;
-            case BW_250:
-                switch(_codingRate)
-                {   // Choosing coding rate
-                case CR_5: _sendTime = 287;
-                    break;
-                case CR_6: _sendTime = 296;
-                    break;
-                case CR_7: _sendTime = 305;
-                    break;
-                case CR_8: _sendTime = 312;
-                    break;
-                }
-                break;
-            case BW_500:
-                switch(_codingRate)
-                {   // Choosing coding rate
-                case CR_5: _sendTime = 242;
-                    break;
-                case CR_6: _sendTime = 267;
-                    break;
-                case CR_7: _sendTime = 272;
-                    break;
-                case CR_8: _sendTime = 276;
-                    break;
-                }
-                break;
-            }
-            break;
-
-        case SF_7:  switch(_bandwidth)
-            {   // Choosing bandwidth
-            case BW_125:
-                switch(_codingRate)
-                {   // Choosing coding rate
-                case CR_5: _sendTime = 408;
-                    break;
-                case CR_6: _sendTime = 438;
-                    break;
-                case CR_7: _sendTime = 468;
-                    break;
-                case CR_8: _sendTime = 497;
-                    break;
-                }
-                break;
-            case BW_250:
-                switch(_codingRate)
-                {   // Choosing coding rate
-                case CR_5: _sendTime = 325;
-                    break;
-                case CR_6: _sendTime = 339;
-                    break;
-                case CR_7: _sendTime = 355;
-                    break;
-                case CR_8: _sendTime = 368;
-                    break;
-                }
-                break;
-            case BW_500:
-                switch(_codingRate)
-                {   // Choosing coding rate
-                case CR_5: _sendTime = 282;
-                    break;
-                case CR_6: _sendTime = 290;
-                    break;
-                case CR_7: _sendTime = 296;
-                    break;
-                case CR_8: _sendTime = 305;
-                    break;
-                }
-                break;
-            }
-            break;
-
-        case SF_8:  switch(_bandwidth)
-            {   // Choosing bandwidth
-            case BW_125:
-                switch(_codingRate)
-                {   // Choosing coding rate
-                case CR_5: _sendTime = 537;
-                    break;
-                case CR_6: _sendTime = 588;
-                    break;
-                case CR_7: _sendTime = 640;
-                    break;
-                case CR_8: _sendTime = 691;
-                    break;
-                }
-                break;
-            case BW_250:
-                switch(_codingRate)
-                {   // Choosing coding rate
-                case CR_5: _sendTime = 388;
-                    break;
-                case CR_6: _sendTime = 415;
-                    break;
-                case CR_7: _sendTime = 440;
-                    break;
-                case CR_8: _sendTime = 466;
-                    break;
-                }
-                break;
-            case BW_500:
-                switch(_codingRate)
-                {   // Choosing coding rate
-                case CR_5: _sendTime = 315;
-                    break;
-                case CR_6: _sendTime = 326;
-                    break;
-                case CR_7: _sendTime = 340;
-                    break;
-                case CR_8: _sendTime = 352;
-                    break;
-                }
-                break;
-            }
-            break;
-
-        case SF_9:  switch(_bandwidth)
-            {   // Choosing bandwidth
-            case BW_125:
-                switch(_codingRate)
-                {   // Choosing coding rate
-                case CR_5: _sendTime = 774;
-                    break;
-                case CR_6: _sendTime = 864;
-                    break;
-                case CR_7: _sendTime = 954;
-                    break;
-                case CR_8: _sendTime = 1044;
-                    break;
-                }
-                break;
-            case BW_250:
-                switch(_codingRate)
-                {   // Choosing coding rate
-                case CR_5: _sendTime = 506;
-                    break;
-                case CR_6: _sendTime = 552;
-                    break;
-                case CR_7: _sendTime = 596;
-                    break;
-                case CR_8: _sendTime = 642;
-                    break;
-                }
-                break;
-            case BW_500:
-                switch(_codingRate)
-                {   // Choosing coding rate
-                case CR_5: _sendTime = 374;
-                    break;
-                case CR_6: _sendTime = 396;
-                    break;
-                case CR_7: _sendTime = 418;
-                    break;
-                case CR_8: _sendTime = 441;
-                    break;
-                }
-                break;
-            }
-            break;
-
-        case SF_10: switch(_bandwidth)
-            {   // Choosing bandwidth
-            case BW_125:
-                switch(_codingRate)
-                {   // Choosing coding rate
-                case CR_5: _sendTime = 1226;
-                    break;
-                case CR_6: _sendTime = 1388;
-                    break;
-                case CR_7: _sendTime = 1552;
-                    break;
-                case CR_8: _sendTime = 1716;
-                    break;
-                }
-                break;
-            case BW_250:
-                switch(_codingRate)
-                {   // Choosing coding rate
-                case CR_5: _sendTime = 732;
-                    break;
-                case CR_6: _sendTime = 815;
-                    break;
-                case CR_7: _sendTime = 896;
-                    break;
-                case CR_8: _sendTime = 977;
-                    break;
-                }
-                break;
-            case BW_500:
-                switch(_codingRate)
-                {   // Choosing coding rate
-                case CR_5: _sendTime = 486;
-                    break;
-                case CR_6: _sendTime = 527;
-                    break;
-                case CR_7: _sendTime = 567;
-                    break;
-                case CR_8: _sendTime = 608;
-                    break;
-                }
-                break;
-            }
-            break;
-
-        case SF_11: switch(_bandwidth)
-            {   // Choosing bandwidth
-            case BW_125:
-                switch(_codingRate)
-                {   // Choosing coding rate
-                case CR_5: _sendTime = 2375;
-                    break;
-                case CR_6: _sendTime = 2735;
-                    break;
-                case CR_7: _sendTime = 3095;
-                    break;
-                case CR_8: _sendTime = 3456;
-                    break;
-                }
-                break;
-            case BW_250:
-                switch(_codingRate)
-                {   // Choosing coding rate
-                case CR_5: _sendTime = 1144;
-                    break;
-                case CR_6: _sendTime = 1291;
-                    break;
-                case CR_7: _sendTime = 1437;
-                    break;
-                case CR_8: _sendTime = 1586;
-                    break;
-                }
-                break;
-            case BW_500:
-                switch(_codingRate)
-                {   // Choosing coding rate
-                case CR_5: _sendTime = 691;
-                    break;
-                case CR_6: _sendTime = 766;
-                    break;
-                case CR_7: _sendTime = 838;
-                    break;
-                case CR_8: _sendTime = 912;
-                    break;
-                }
-                break;
-            }
-            break;
-
-        case SF_12: switch(_bandwidth)
-            {   // Choosing bandwidth
-            case BW_125:
-                switch(_codingRate)
-                {   // Choosing coding rate
-                case CR_5: _sendTime = 4180;
-                    break;
-                case CR_6: _sendTime = 4836;
-                    break;
-                case CR_7: _sendTime = 5491;
-                    break;
-                case CR_8: _sendTime = 6146;
-                    break;
-                }
-                break;
-            case BW_250:
-                switch(_codingRate)
-                {   // Choosing coding rate
-                case CR_5: _sendTime = 1965;
-                    break;
-                case CR_6: _sendTime = 2244;
-                    break;
-                case CR_7: _sendTime = 2521;
-                    break;
-                case CR_8: _sendTime = 2800;
-                    break;
-                }
-                break;
-            case BW_500:
-                switch(_codingRate)
-                {   // Choosing coding rate
-                case CR_5: _sendTime = 1102;
-                    break;
-                case CR_6: _sendTime = 1241;
-                    break;
-                case CR_7: _sendTime = 1381;
-                    break;
-                case CR_8: _sendTime = 1520;
-                    break;
-                }
-                break;
-            }
-            break;
-        default: _sendTime = MAX_TIMEOUT;
-        }
-    }
-    else
-    {
-        _sendTime = MAX_TIMEOUT;
-    }
-    delay = ((0.1*_sendTime) + 1);
-    _sendTime = (uint16_t) ((_sendTime * 1.2) + (rand()%delay));
-
-
-    state = 0;
-    return state;
-}
 
 /*
  Function: It sets a char array payload packet in a packet struct.
@@ -3255,10 +2807,7 @@ uint8_t SX1272::setPacket(uint8_t dest, uint8_t *payload)
     { // LoRa mode
         writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);  // Stdby LoRa mode to write in FIFO
     }
-    else
-    { // FSK mode
-        writeRegister(REG_OP_MODE, FSK_STANDBY_MODE);   // Stdby FSK mode to write in FIFO
-    }
+
 
     _reception = CORRECT_PACKET;    // Updating incorrect value to send a packet (old or new)
     if( _retries == 0 )
@@ -3288,12 +2837,6 @@ uint8_t SX1272::setPacket(uint8_t dest, uint8_t *payload)
     // set the type to be a data packet
     packet_sent.type |= PKT_TYPE_DATA;
 
-#ifdef W_REQUESTED_ACK
-    // added by C. Pham
-    // indicate that an ACK should be sent by the receiver
-    if (_requestACK)
-        packet_sent.type |= PKT_FLAG_ACK_REQ;
-#endif
 
     writeRegister(REG_FIFO_ADDR_PTR, 0x80);  // Setting address pointer in FIFO data buffer
     if( state == 0 )
@@ -3321,30 +2864,6 @@ uint8_t SX1272::setPacket(uint8_t dest, uint8_t *payload)
     return state;
 }
 
-/*
- Function: Configures the module to transmit information.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-uint8_t SX1272::sendWithMAXTimeout()
-{
-    return sendWithTimeout(MAX_TIMEOUT);
-}
-
-/*
- Function: Configures the module to transmit information.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-uint8_t SX1272::sendWithTimeout()
-{
-    setTimeout();
-    return sendWithTimeout(_sendTime);
-}
 
 /*
  Function: Configures the module to transmit information.
@@ -3360,47 +2879,29 @@ uint8_t SX1272::sendWithTimeout(uint16_t wait)
     unsigned long previous;
 
 
-
-    // clearFlags();    // Initializing flags
-
     // wait to TxDone flag
     previous = millis();
-    if( _modem == LORA )
-    { // LoRa mode
-        clearFlags();   // Initializing flags
+    clearFlags();   // Initializing flags
 
-        writeRegister(REG_OP_MODE, LORA_TX_MODE);  // LORA mode - Tx
+    writeRegister(REG_OP_MODE, LORA_TX_MODE);  // LORA mode - Tx
 
+    value = readRegister(REG_IRQ_FLAGS);
+    // Wait until the packet is sent (TX Done flag) or the timeout expires
+
+    // very dumb wait
+    while ((bitRead(value, 3) == 0) && (millis() - previous < wait))
+    {
         value = readRegister(REG_IRQ_FLAGS);
-        // Wait until the packet is sent (TX Done flag) or the timeout expires
-        while ((bitRead(value, 3) == 0) && (millis() - previous < wait))
+        // Condition to avoid an overflow (DO NOT REMOVE)
+        if( millis() < previous )
         {
-            value = readRegister(REG_IRQ_FLAGS);
-            // Condition to avoid an overflow (DO NOT REMOVE)
-            if( millis() < previous )
-            {
-                previous = millis();
-            }
+            previous = millis();
         }
-        state = 1;
+        delay(1);
     }
-    else
-    { // FSK mode
-        writeRegister(REG_OP_MODE, FSK_TX_MODE);  // FSK mode - Tx
+    state = 1;
+  
 
-        value = readRegister(REG_IRQ_FLAGS2);
-        // Wait until the packet is sent (Packet Sent flag) or the timeout expires
-        while ((bitRead(value, 3) == 0) && (millis() - previous < wait))
-        {
-            value = readRegister(REG_IRQ_FLAGS2);
-            // Condition to avoid an overflow (DO NOT REMOVE)
-            if( millis() < previous )
-            {
-                previous = millis();
-            }
-        }
-        state = 1;
-    }
     if( bitRead(value, 3) == 1 )
     {
         state = 0;  // Packet successfully sent
@@ -3408,28 +2909,11 @@ uint8_t SX1272::sendWithTimeout(uint16_t wait)
 
 
     clearFlags();       // Initializing flags
+
     return state;
 }
 
 
-/*
- Function: Configures the module to transmit information.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-uint8_t SX1272::sendPacketTimeout(uint8_t dest, char *payload)
-{
-    uint8_t state = 2;
-
-    state = setPacket(dest, payload);   // Setting a packet with 'dest' destination
-    if (state == 0)                             // and writing it in FIFO.
-    {
-        state = sendWithTimeout();  // Sending the packet
-    }
-    return state;
-}
 
 /*
  Function: Configures the module to transmit information.
@@ -3448,208 +2932,14 @@ uint8_t SX1272::sendPacketTimeout(uint8_t dest, uint8_t *payload, uint16_t lengt
 
     error = setPacket(dest, payload); // Setting a packet with 'dest' destination
                                           // and writing it in FIFO.
-    
+      setTimeout();
+     sendWithTimeout(MAX_TIMEOUT);
 
-    error = sendWithTimeout();    // Sending the packet
+   // error = sendWithTimeout();    // Sending the packet
 
-    return state_f;
+    return error;
 }
 
-
-
-/*
- Function: It gets and stores an ACK if it is received.
- Returns:
-*/
-uint8_t SX1272::getACK()
-{
-    return getACK(MAX_TIMEOUT);
-}
-
-/*
- Function: It gets and stores an ACK if it is received, before ending 'wait' time.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The ACK has not been received
-   state = 1  --> The N-ACK has been received with no errors
-   state = 0  --> The ACK has been received with no errors
- Parameters:
-   wait: time to wait while there is no a valid header received.
-*/
-uint8_t SX1272::getACK(uint16_t wait)
-{
-    uint8_t state = 2;
-    byte value = 0x00;
-    unsigned long previous;
-    boolean a_received = false;
-
-    //#if (SX1272_debug_mode > 1)
-    Serial.println();
-    Serial.println(F("Starting 'getACK'"));
-    //#endif
-
-    previous = millis();
-
-    if( _modem == LORA )
-    { // LoRa mode
-        value = readRegister(REG_IRQ_FLAGS);
-        // Wait until the ACK is received (RxDone flag) or the timeout expires
-        while ((bitRead(value, 6) == 0) && (millis() - previous < wait))
-        {
-            value = readRegister(REG_IRQ_FLAGS);
-            if( millis() < previous )
-            {
-                previous = millis();
-            }
-        }
-        if( bitRead(value, 6) == 1 )
-        { // ACK received
-            // comment by C. Pham
-            // not really safe because the received packet may not be an ACK
-            // probability is low if using unicast to gateway, but if broadcast
-            // can get a packet from another node!!
-            a_received = true;
-        }
-        // Standby para minimizar el consumo
-        writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);  // Setting standby LoRa mode
-    }
-    else
-    { // FSK mode
-        value = readRegister(REG_IRQ_FLAGS2);
-        // Wait until the packet is received (RxDone flag) or the timeout expires
-        while ((bitRead(value, 2) == 0) && (millis() - previous < wait))
-        {
-            value = readRegister(REG_IRQ_FLAGS2);
-            if( millis() < previous )
-            {
-                previous = millis();
-            }
-        }
-        if( bitRead(value, 2) == 1 )
-        { // ACK received
-            a_received = true;
-        }
-        // Standby para minimizar el consumo
-        writeRegister(REG_OP_MODE, FSK_STANDBY_MODE);   // Setting standby FSK mode
-    }
-
-    // comment by C. Pham
-    // not safe because the received packet may not be an ACK!
-    if( a_received )
-    {
-        // Storing the received ACK
-        ACK.dst = _destination;
-        ACK.type = readRegister(REG_FIFO);
-        ACK.src = readRegister(REG_FIFO);
-        ACK.packnum = readRegister(REG_FIFO);
-        ACK.length = readRegister(REG_FIFO);
-        ACK.data[0] = readRegister(REG_FIFO);
-        ACK.data[1] = readRegister(REG_FIFO);
-
-        if (ACK.type == PKT_TYPE_ACK) {
-
-            // Checking the received ACK
-            if( ACK.dst == packet_sent.src )
-            {
-                if( ACK.src == packet_sent.dst )
-                {
-                    if( ACK.packnum == packet_sent.packnum )
-                    {
-                        if( ACK.length == 2 )
-                        {
-                            if( ACK.data[0] == CORRECT_PACKET )
-                            {
-                                state = 0;
-                                //#if (SX1272_debug_mode > 0)
-                                // Printing the received ACK
-                                Serial.println(F("## ACK received:"));
-                                Serial.print(F("Destination: "));
-                                Serial.println(ACK.dst);                // Printing destination
-                                Serial.print(F("Source: "));
-                                Serial.println(ACK.src);                // Printing source
-                                Serial.print(F("ACK number: "));
-                                Serial.println(ACK.packnum);            // Printing ACK number
-                                Serial.print(F("ACK length: "));
-                                Serial.println(ACK.length);             // Printing ACK length
-                                Serial.print(F("ACK payload: "));
-                                Serial.println(ACK.data[0]);            // Printing ACK payload
-                                Serial.print(F("ACK SNR of rcv pkt at gw: "));
-
-                                value = ACK.data[1];
-
-                                if( value & 0x80 ) // The SNR sign bit is 1
-                                {
-                                    // Invert and divide by 4
-                                    value = ( ( ~value + 1 ) & 0xFF ) >> 2;
-                                    _rcv_snr_in_ack = -value;
-                                }
-                                else
-                                {
-                                    // Divide by 4
-                                    _rcv_snr_in_ack = ( value & 0xFF ) >> 2;
-                                }
-
-                                Serial.println(_rcv_snr_in_ack);
-                                Serial.println(F("##"));
-                                Serial.println();
-                                //#endif
-                            }
-                            else
-                            {
-                                state = 1;
-                                //#if (SX1272_debug_mode > 0)
-                                Serial.println(F("** N-ACK received **"));
-                                Serial.println();
-                                //#endif
-                            }
-                        }
-                        else
-                        {
-                            state = 1;
-                            //#if (SX1272_debug_mode > 0)
-                            Serial.println(F("** ACK length incorrectly received **"));
-                            Serial.println();
-                            //#endif
-                        }
-                    }
-                    else
-                    {
-                        state = 1;
-                        //#if (SX1272_debug_mode > 0)
-                        Serial.println(F("** ACK number incorrectly received **"));
-                        Serial.println();
-                        //#endif
-                    }
-                }
-                else
-                {
-                    state = 1;
-                    //#if (SX1272_debug_mode > 0)
-                    Serial.println(F("** ACK source incorrectly received **"));
-                    Serial.println();
-                    //#endif
-                }
-            }
-        }
-        else
-        {
-            state = 1;
-            //#if (SX1272_debug_mode > 0)
-            Serial.println(F("** ACK destination incorrectly received **"));
-            Serial.println();
-            //#endif
-        }
-    }
-    else
-    {
-        state = 1;
-        //#if (SX1272_debug_mode > 0)
-        Serial.println(F("** ACK lost **"));
-        Serial.println();
-        //#endif
-    }
-    clearFlags();   // Initializing flags
-    return state;
-}
 
 /*
  Function: It gets the temperature from the measurement block module.
@@ -3704,34 +2994,6 @@ void SX1272::setPacketType(uint8_t type)
 }
 
 
-/*
- Function: Indicates the CR within the module is configured.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-   state = -1 --> Forbidden command for this protocol
-*/
-int8_t  SX1272::getSyncWord()
-{
-    int8_t state = 2;
-
-
-    if( _modem == FSK )
-    {
-        state = -1;     // sync word is not available in FSK mode
-
-    }
-    else
-    {
-        _syncWord = readRegister(REG_SYNC_WORD);
-
-        state = 0;
-
-
-    }
-    return state;
-}
 
 /*
  Function: Sets the sync word in the module.
