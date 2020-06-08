@@ -36,6 +36,21 @@ SX1272::SX1272()
     packet_sent.retry = _retries;
 };
 
+
+/*
+ Function: Configures the module to transmit information.
+ Returns: Integer that determines if there has been any error
+   state = 2  --> The command has not been executed
+   state = 1  --> There has been an error while executing the command
+   state = 0  --> The command has been executed with no errors
+*/
+uint8_t SX1272::sendWithTimeout()
+{
+   // setTimeout();
+    return sendWithTimeout(MAX_TIMEOUT);
+}
+
+
 /*
  Function: Sets the module ON.
  Returns: uint8_t setLORA state
