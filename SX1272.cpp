@@ -5,6 +5,7 @@
 
 #define SX1272_REGISTER_VERSION_CODE 0x22
 #define SX1276_REGISTER_VERSION_CODE 0x12
+#define SX127X_DELAY  delay(100)
 
 
 SX1272::SX1272()
@@ -16,7 +17,6 @@ SX1272::SX1272()
     _channel = CH_12_900;
     _header = HEADER_ON;
     _CRC = CRC_OFF;
-    _modem = FSK;
     _power = 15;
     _packetNumber = 0;
     _reception = CORRECT_PACKET;
@@ -36,8 +36,6 @@ SX1272::SX1272()
     packet_sent.retry = _retries;
 };
 
-
-
 /*
  Function: Sets the module ON.
  Returns: uint8_t setLORA state
@@ -50,25 +48,23 @@ uint8_t SX1272::ON()
     // Powering the module
     pinMode(SX1272_SS,OUTPUT);
     digitalWrite(SX1272_SS,HIGH);
-    delay(100);
-
-
+    SX127X_DELAY;
 
     // MSB, mode 0, 2Mhz 
     SPI.begin();
     SPI.setBitOrder(MSBFIRST);
     SPI.setClockDivider(SPI_CLOCK_DIV8);
     SPI.setDataMode(SPI_MODE0);
-    delay(100);
+    SX127X_DELAY;
 
     // added by C. Pham
     pinMode(SX1272_RST,OUTPUT);
 
     // request device reset 
     digitalWrite(SX1272_RST,HIGH);
-    delay(100);
+    SX127X_DELAY;
     digitalWrite(SX1272_RST,LOW);
-    delay(100);
+    SX127X_DELAY;
 
     // Read Version 
     version = readRegister(REG_VERSION);
@@ -80,12 +76,15 @@ uint8_t SX1272::ON()
 
         case SX1276_REGISTER_VERSION_CODE:
             _board = SX1276Chip;  
-                Serial.println(F("SX1276Chip"));
             break;
         default:
             error = -1; 
             break; 
     }
+
+
+    if(error != 0)
+        return error; 
 
 
     // set LoRa mode
@@ -162,7 +161,6 @@ int8_t SX1272::writeReadRegister(byte address, byte data)
 
     delay(100);
 
-
     dataRead = readRegister(address);
 
     if(data != dataRead)
@@ -175,18 +173,29 @@ int8_t SX1272::writeReadRegister(byte address, byte data)
  Function: Clears the interruption flags
  Returns: Nothing
 */
-void SX1272::clearFlags()
+int8_t SX1272::clearFlags()
 {
-    int error =0;
+     int8_t error =0;
     byte st0;
 
     st0 = readRegister(REG_OP_MODE);        // Save the previous status
+    
+    // Stdby mode to write in registers
+    error = writeReadRegister(REG_OP_MODE, LORA_STANDBY_MODE);  
+    if(error !=0)
+        return error;
 
-    error = writeReadRegister(REG_OP_MODE, LORA_STANDBY_MODE);  // Stdby mode to write in registers
-    error = writeReadRegister(REG_IRQ_FLAGS, 0xFF); // LoRa mode flags register
-    error = writeReadRegister(REG_OP_MODE, st0);        // Getting back to previous status
+    // LoRa mode flags register
+    error = writeReadRegister(REG_IRQ_FLAGS, 0xFF); 
+    if(error !=0)
+        return error;
 
-    return; 
+    // Getting back to previous status
+    error = writeReadRegister(REG_OP_MODE, st0);   
+    if(error !=0)
+        return error;
+
+    return error; 
 }
 
 /*
@@ -198,32 +207,32 @@ void SX1272::clearFlags()
 */
 uint8_t SX1272::setLORA()
 {
-    uint8_t state = 2;
+    uint8_t retry=0;
+    uint8_t error = 0;
     byte st0;
 
-
-    // modified by C. Pham
-    uint8_t retry=0;
-
     do {
-        delay(200);
         writeRegister(REG_OP_MODE, FSK_SLEEP_MODE);    // Sleep mode (mandatory to set LoRa mode)
         writeRegister(REG_OP_MODE, LORA_SLEEP_MODE);    // LoRa sleep mode
         writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);
         delay(200);
+        // read the operation register, LoRa should exit standby mode 
         st0 = readRegister(REG_OP_MODE);
         Serial.println(F("..."));
         retry++; 
 
-    } while (st0!=LORA_STANDBY_MODE);   // LoRa standby mode
+        if(retry > 10)
+        {
+            error = -1;
+            break;
+        }
+    } while (st0!=LORA_STANDBY_MODE); 
         
-    _modem = LORA;
-    state = 0;
-   
-    return state;
+    if(error == 0 )
+        _modem = LORA;
+
+    return error;
 }
-
-
 
 
 
@@ -231,78 +240,71 @@ int8_t SX1272::setMode(uint8_t mode)
 {
     int8_t error = 0;
     byte st0;
-    byte config1 = 0x00;
-    byte config2 = 0x00;
+    uint8_t spreadingFactor =0, bandwidth =0; 
 
     st0 = readRegister(REG_OP_MODE);        // Save the previous status
-
     writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);  // LoRa standby mode
-
-    // 
-    setCR(CR_5);        // CR = 4/5
-
 
     switch (mode)
     {
         // mode 1 (better reach, medium time on air)
         case 1:            
-            setSF(SF_12);       // SF = 12
-            setBW(BW_125);      // BW = 125 KHz
+            spreadingFactor = (SF_12);       // SF = 12
+            bandwidth = (BW_125);            // BW = 125 KHz
             break;
 
         // mode 2 (medium reach, less time on air)
         case 2:            
-            setSF(SF_12);       // SF = 12
-            setBW(BW_250);      // BW = 250 KHz
+            spreadingFactor = (SF_12);       // SF = 12
+            bandwidth = (BW_250);            // BW = 250 KHz
             break;
 
         // mode 3 (worst reach, less time on air)
         case 3:            
-            setSF(SF_10);       // SF = 10
-            setBW(BW_125);      // BW = 125 KHz
+            spreadingFactor = (SF_10);       // SF = 10
+            bandwidth = (BW_125);            // BW = 125 KHz
             break;
 
         // mode 4 (better reach, low time on air)
         case 4:            
-            setSF(SF_12);       // SF = 12
-            setBW(BW_500);      // BW = 500 KHz
+            spreadingFactor = (SF_12);       // SF = 12
+            bandwidth = (BW_500);            // BW = 500 KHz
             break;
 
         // mode 5 (better reach, medium time on air)
         case 5:            
-            setSF(SF_10);       // SF = 10
-            setBW(BW_250);      // BW = 250 KHz
+            spreadingFactor = (SF_10);       // SF = 10
+            bandwidth = (BW_250);            // BW = 250 KHz
             break;
 
         // mode 6 (better reach, worst time-on-air)
         case 6:            
-            setSF(SF_11);       // SF = 11
-            setBW(BW_500);      // BW = 500 KHz
+            spreadingFactor = (SF_11);       // SF = 11
+            bandwidth = (BW_500);            // BW = 500 KHz
             break;
 
         // mode 7 (medium-high reach, medium-low time-on-air)
         case 7:            
-            setSF(SF_9);        // SF = 9
-            setBW(BW_250);      // BW = 250 KHz
+            spreadingFactor = (SF_9);        // SF = 9
+            bandwidth = (BW_250);            // BW = 250 KHz
             break;
 
             // mode 8 (medium reach, medium time-on-air)
-        case 8:    
-            
-            setSF(SF_9);        // SF = 9
-            setBW(BW_500);      // BW = 500 KHz
+        case 8:           
+            spreadingFactor = (SF_9);        // SF = 9
+            bandwidth = (BW_500);            // BW = 500 KHz
             break;
 
         // mode 9 (medium-low reach, medium-high time-on-air)
         case 9:            
-            setSF(SF_8);        // SF = 8
-            setBW(BW_500);      // BW = 500 KHz
+            spreadingFactor = (SF_8);        // SF = 8
+            bandwidth = (BW_500);            // BW = 500 KHz
             break;
 
         // mode 10 (worst reach, less time_on_air)
         case 10:            
-            setSF(SF_7);        // SF = 7
-            setBW(BW_500);      // BW = 500 KHz
+            spreadingFactor = (SF_7);        // SF = 7
+            bandwidth = (BW_500);            // BW = 500 KHz
             break;
 
         default:    
@@ -310,11 +312,11 @@ int8_t SX1272::setMode(uint8_t mode)
 
     };
 
-    
-    // added by C. Pham
-    if (error == 0)
-        _loraMode=mode;
+    setCR(CR_5);     // always set the coding rate to 5
+    setSF(spreadingFactor);       // set the spreading factor
+    setBW(bandwidth);      // Set the bandwidth 
 
+    _loraMode=mode;
 
     writeRegister(REG_OP_MODE, st0);    // Getting back to previous status
     delay(100);
@@ -364,22 +366,17 @@ int8_t  SX1272::getSF()
     int8_t state = 2;
     byte config2;
 
-    if( _modem == FSK )
-    {
-        state = -1;     // SF is not available in FSK mode
-    }
-    else
-    {
-        // take out bits 7-4 from REG_MODEM_CONFIG2 indicates _spreadingFactor
-        config2 = (readRegister(REG_MODEM_CONFIG2)) >> 4;
-        _spreadingFactor = config2;
-        state = 1;
+  
+    // take out bits 7-4 from REG_MODEM_CONFIG2 indicates _spreadingFactor
+    config2 = (readRegister(REG_MODEM_CONFIG2)) >> 4;
+    _spreadingFactor = config2;
+    state = 1;
 
-        if( (config2 == _spreadingFactor) && isSF(_spreadingFactor) )
-        {
-            state = 0;
-        }
+    if( (config2 == _spreadingFactor) && isSF(_spreadingFactor) )
+    {
+        state = 0;
     }
+ 
     return state;
 }
 
@@ -586,35 +583,30 @@ int8_t  SX1272::getBW()
     byte config1;
 
 
-    if( _modem == FSK )
+    state = -1;     // BW is not available in FSK mode
+
+
+    // added by C. Pham
+    if (_board==SX1272Chip) {
+        // take out bits 7-6 from REG_MODEM_CONFIG1 indicates _bandwidth
+        config1 = (readRegister(REG_MODEM_CONFIG1)) >> 6;
+    }
+    else {
+        // take out bits 7-4 from REG_MODEM_CONFIG1 indicates _bandwidth
+        config1 = (readRegister(REG_MODEM_CONFIG1)) >> 4;
+    }
+
+    _bandwidth = config1;
+
+    if( (config1 == _bandwidth) && isBW(_bandwidth) )
     {
-        state = -1;     // BW is not available in FSK mode
+        state = 0;
 
     }
     else
     {
-        // added by C. Pham
-        if (_board==SX1272Chip) {
-            // take out bits 7-6 from REG_MODEM_CONFIG1 indicates _bandwidth
-            config1 = (readRegister(REG_MODEM_CONFIG1)) >> 6;
-        }
-        else {
-            // take out bits 7-4 from REG_MODEM_CONFIG1 indicates _bandwidth
-            config1 = (readRegister(REG_MODEM_CONFIG1)) >> 4;
-        }
+        state = 1;
 
-        _bandwidth = config1;
-
-        if( (config1 == _bandwidth) && isBW(_bandwidth) )
-        {
-            state = 0;
-
-        }
-        else
-        {
-            state = 1;
-
-        }
     }
     return state;
 }
@@ -749,35 +741,28 @@ int8_t  SX1272::getCR()
 {
     int8_t state = 2;
     byte config1;
-
-
-    if( _modem == FSK )
-    {
-        state = -1;     // CR is not available in FSK mode
+  
+    // added by C. Pham
+    if (_board==SX1272Chip) {
+        // take out bits 7-3 from REG_MODEM_CONFIG1 indicates _bandwidth & _codingRate
+        config1 = (readRegister(REG_MODEM_CONFIG1)) >> 3;
+        config1 = config1 & B00000111;  // clears bits 7-3 ---> clears _bandwidth
     }
-    else
-    {
-        // added by C. Pham
-        if (_board==SX1272Chip) {
-            // take out bits 7-3 from REG_MODEM_CONFIG1 indicates _bandwidth & _codingRate
-            config1 = (readRegister(REG_MODEM_CONFIG1)) >> 3;
-            config1 = config1 & B00000111;  // clears bits 7-3 ---> clears _bandwidth
-        }
-        else {
-            // take out bits 7-1 from REG_MODEM_CONFIG1 indicates _bandwidth & _codingRate
-            config1 = (readRegister(REG_MODEM_CONFIG1)) >> 1;
-            config1 = config1 & B00000111;  // clears bits 7-3 ---> clears _bandwidth
-        }
-
-        _codingRate = config1;
-        state = 1;
-
-        if( (config1 == _codingRate) && isCR(_codingRate) )
-        {
-            state = 0;
-
-        }
+    else {
+        // take out bits 7-1 from REG_MODEM_CONFIG1 indicates _bandwidth & _codingRate
+        config1 = (readRegister(REG_MODEM_CONFIG1)) >> 1;
+        config1 = config1 & B00000111;  // clears bits 7-3 ---> clears _bandwidth
     }
+
+    _codingRate = config1;
+    state = 1;
+
+    if( (config1 == _codingRate) && isCR(_codingRate) )
+    {
+        state = 0;
+
+    }
+
     return state;
 }
 
@@ -1626,14 +1611,6 @@ uint8_t SX1272::receiveAll(uint16_t wait)
     uint8_t state = 2;
     byte config1;
 
-    if( _modem == FSK )
-    { // FSK mode
-        writeRegister(REG_OP_MODE, FSK_STANDBY_MODE);       // Setting standby FSK mode
-        config1 = readRegister(REG_PACKET_CONFIG1);
-        config1 = config1 & B11111001;          // clears bits 2-1 from REG_PACKET_CONFIG1
-        writeRegister(REG_PACKET_CONFIG1, config1);     // AddressFiltering = None
-    }
-
     state = receive();  // Setting Rx mode
     if( state == 0 )
     {
@@ -1714,9 +1691,6 @@ boolean SX1272::availableData(uint16_t wait)
     // updated and is not the _destination value from the previously packet
     if( _hreceived == true )
     { // Checking destination
-
-
-
         // modified by C. Pham
         // if _rawFormat, accept all
         if( (_destination == _nodeAddress) || (_destination == BROADCAST_0) || _rawFormat)
@@ -1899,15 +1873,8 @@ int8_t SX1272::setDestination(uint8_t dest)
 */
 uint8_t SX1272::setPayload(uint8_t *payload)
 {
-    uint8_t state = 2;
-
-
-    state = 1;
-    if( ( _modem == FSK ) && ( _payloadlength > MAX_PAYLOAD_FSK ) )
-    {
-        _payloadlength = MAX_PAYLOAD_FSK;
-        state = 1;
-    }
+    uint8_t state = 0;
+ 
     for(unsigned int i = 0; i < _payloadlength; i++)
     {
         packet_sent.data[i] = payload[i];   // Storing payload in packet structure
