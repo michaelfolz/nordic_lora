@@ -22,7 +22,7 @@ SX1272::SX1272()
     _reception = CORRECT_PACKET;
     _retries = 0;
     // added by C. Pham
-    _defaultSyncWord=0x12;
+    _syncWord=0x12;
     _rawFormat=false;
     _extendedIFS=true;
     _RSSIonSend=true;
@@ -97,9 +97,9 @@ uint8_t SX1272::ON()
 
     // added by C. Pham
     // default sync word for non-LoRaWAN
-    setSyncWord(_defaultSyncWord);
+    setSyncWord(_syncWord);
  
-    _defaultSyncWord=_syncWord;
+    //_defaultSyncWord=_syncWord;
     //end
 
     return error;
@@ -160,7 +160,7 @@ int8_t SX1272::writeReadRegister(byte address, byte data)
     byte dataRead = 0;
     writeRegister(address, data);
 
-    delay(50);
+    delay(100);
 
 
     dataRead = readRegister(address);
@@ -198,20 +198,33 @@ void SX1272::clearFlags()
 */
 uint8_t SX1272::setLORA()
 {
-    uint8_t error = 0;
+    uint8_t state = 2;
     byte st0;
-    
-    error = writeReadRegister(REG_OP_MODE, (FSK_SLEEP_MODE | LORA_STANDBY_MODE | LORA_SLEEP_MODE) );
-    if(error != 0)
-    {
-        Serial.print("register doesnt match");
-        return error; 
-    }
 
+
+    // modified by C. Pham
+    uint8_t retry=0;
+
+    do {
+        delay(200);
+        writeRegister(REG_OP_MODE, FSK_SLEEP_MODE);    // Sleep mode (mandatory to set LoRa mode)
+        writeRegister(REG_OP_MODE, LORA_SLEEP_MODE);    // LoRa sleep mode
+        writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);
+        delay(200);
+        st0 = readRegister(REG_OP_MODE);
+        Serial.println(F("..."));
+        retry++; 
+
+    } while (st0!=LORA_STANDBY_MODE);   // LoRa standby mode
+        
     _modem = LORA;
+    state = 0;
    
-    return error;
+    return state;
 }
+
+
+
 
 
 int8_t SX1272::setMode(uint8_t mode)
@@ -232,71 +245,62 @@ int8_t SX1272::setMode(uint8_t mode)
     switch (mode)
     {
         // mode 1 (better reach, medium time on air)
-        case 1:
-            
+        case 1:            
             setSF(SF_12);       // SF = 12
             setBW(BW_125);      // BW = 125 KHz
             break;
 
         // mode 2 (medium reach, less time on air)
-        case 2:
-            
+        case 2:            
             setSF(SF_12);       // SF = 12
             setBW(BW_250);      // BW = 250 KHz
             break;
 
         // mode 3 (worst reach, less time on air)
-        case 3:
-            
+        case 3:            
             setSF(SF_10);       // SF = 10
             setBW(BW_125);      // BW = 125 KHz
             break;
 
         // mode 4 (better reach, low time on air)
-        case 4:
-            
+        case 4:            
             setSF(SF_12);       // SF = 12
             setBW(BW_500);      // BW = 500 KHz
             break;
 
         // mode 5 (better reach, medium time on air)
-        case 5:
-            
+        case 5:            
             setSF(SF_10);       // SF = 10
             setBW(BW_250);      // BW = 250 KHz
             break;
 
         // mode 6 (better reach, worst time-on-air)
-        case 6:
-            
+        case 6:            
             setSF(SF_11);       // SF = 11
             setBW(BW_500);      // BW = 500 KHz
             break;
 
         // mode 7 (medium-high reach, medium-low time-on-air)
-        case 7:
-            
+        case 7:            
             setSF(SF_9);        // SF = 9
             setBW(BW_250);      // BW = 250 KHz
             break;
 
             // mode 8 (medium reach, medium time-on-air)
-        case 8:     
+        case 8:    
             
             setSF(SF_9);        // SF = 9
             setBW(BW_500);      // BW = 500 KHz
             break;
 
         // mode 9 (medium-low reach, medium-high time-on-air)
-        case 9:
-            
+        case 9:            
             setSF(SF_8);        // SF = 8
             setBW(BW_500);      // BW = 500 KHz
             break;
 
         // mode 10 (worst reach, less time_on_air)
-        case 10:
-            
+        case 10:            
             setSF(SF_7);        // SF = 7
             setBW(BW_500);      // BW = 500 KHz
             break;
@@ -317,353 +321,6 @@ int8_t SX1272::setMode(uint8_t mode)
     return error;
 }
 
-/*
- Function: Indicates if module is configured in implicit or explicit header mode.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-uint8_t SX1272::getHeader()
-{
-    int8_t state = 2;
-
-    // added by C. Pham
-    uint8_t theHeaderBit;
-
-    if (_board==SX1272Chip)
-        theHeaderBit=2;
-    else
-        theHeaderBit=0;
-
-    // take out bit 2 from REG_MODEM_CONFIG1 indicates ImplicitHeaderModeOn
-    if( bitRead(REG_MODEM_CONFIG1, theHeaderBit) == 0 )
-    { // explicit header mode (ON)
-        _header = HEADER_ON;
-        state = 1;
-    }
-    else
-    { // implicit header mode (OFF)
-        _header = HEADER_OFF;
-        state = 1;
-    }
-
-    state = 0;
-
-    return state;
-}
-
-/*
- Function: Sets the module in explicit header mode (header is sent).
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-   state = -1 --> Forbidden command for this protocol
-*/
-int8_t  SX1272::setHeaderON()
-{
-    int8_t state = 2;
-    byte config1;
-
-
-    if( _modem == FSK )
-    {
-        state = -1;     // header is not available in FSK mode
-    }
-    else
-    {
-        config1 = readRegister(REG_MODEM_CONFIG1);  // Save config1 to modify only the header bit
-        if( _spreadingFactor == 6 )
-        {
-            state = -1;     // Mandatory headerOFF with SF = 6
-        }
-        else
-        {
-            // added by C. Pham
-            if (_board==SX1272Chip)
-                config1 = config1 & B11111011;      // clears bit 2 from config1 = headerON
-            else
-                config1 = config1 & B11111110;              // clears bit 0 from config1 = headerON
-
-            writeRegister(REG_MODEM_CONFIG1,config1);   // Update config1
-        }
-
-        // added by C. Pham
-        uint8_t theHeaderBit;
-
-        if (_board==SX1272Chip)
-            theHeaderBit=2;
-        else
-            theHeaderBit=0;
-
-        if( _spreadingFactor != 6 )
-        { // checking headerON taking out bit 2 from REG_MODEM_CONFIG1
-            config1 = readRegister(REG_MODEM_CONFIG1);
-            // modified by C. Pham
-            if( bitRead(config1, theHeaderBit) == HEADER_ON )
-            {
-                state = 0;
-                _header = HEADER_ON;
-            }
-            else
-            {
-                state = 1;
-            }
-        }
-        return state;
-    }
-}
-
-/*
- Function: Sets the module in implicit header mode (header is not sent).
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-   state = -1 --> Forbidden command for this protocol
-*/
-int8_t  SX1272::setHeaderOFF()
-{
-    uint8_t state = 2;
-    byte config1;
-
-    if( _modem == FSK )
-    { // header is not available in FSK mode
-        state = -1;
-    }
-    else
-    {
-        config1 = readRegister(REG_MODEM_CONFIG1);  // Save config1 to modify only the header bit
-
-        // modified by C. Pham
-        if (_board==SX1272Chip)
-            config1 = config1 | B00000100;          // sets bit 2 from REG_MODEM_CONFIG1 = headerOFF
-        else
-            config1 = config1 | B00000001;                      // sets bit 0 from REG_MODEM_CONFIG1 = headerOFF
-
-        writeRegister(REG_MODEM_CONFIG1,config1);       // Update config1
-
-        config1 = readRegister(REG_MODEM_CONFIG1);
-
-        // added by C. Pham
-        uint8_t theHeaderBit;
-
-        if (_board==SX1272Chip)
-            theHeaderBit=2;
-        else
-            theHeaderBit=0;
-
-        if( bitRead(config1, theHeaderBit) == HEADER_OFF )
-        { // checking headerOFF taking out bit 2 from REG_MODEM_CONFIG1
-            state = 0;
-            _header = HEADER_OFF;
-        }
-        else
-        {
-            state = 1;
-        }
-    }
-    return state;
-}
-
-/*
- Function: Indicates if module is configured with or without checking CRC.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-uint8_t SX1272::getCRC()
-{
-    int8_t state = 2;
-    byte value;
-
-
-    if( _modem == LORA )
-    { // LoRa mode
-
-        // added by C. Pham
-        uint8_t theRegister;
-        uint8_t theCrcBit;
-
-        if (_board==SX1272Chip) {
-            theRegister=REG_MODEM_CONFIG1;
-            theCrcBit=1;
-        }
-        else {
-            theRegister=REG_MODEM_CONFIG2;
-            theCrcBit=2;
-        }
-
-        // take out bit 1 from REG_MODEM_CONFIG1 indicates RxPayloadCrcOn
-        value = readRegister(theRegister);
-        if( bitRead(value, theCrcBit) == CRC_OFF )
-        { // CRCoff
-            _CRC = CRC_OFF;
-            state = 0;
-        }
-        else
-        { // CRCon
-            _CRC = CRC_ON;
-            state = 0;
-        }
-    }
-    else
-    { // FSK mode
-
-        // take out bit 2 from REG_PACKET_CONFIG1 indicates CrcOn
-        value = readRegister(REG_PACKET_CONFIG1);
-        if( bitRead(value, 4) == CRC_OFF )
-        { // CRCoff
-            _CRC = CRC_OFF;
-            state = 0;
-        }
-        else
-        { // CRCon
-            _CRC = CRC_ON;
-            state = 0;
-        }
-    }
-    if( state != 0 )
-    {
-        state = 1;
-    }
-    return state;
-}
-
-/*
- Function: Sets the module with CRC on.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-uint8_t SX1272::setCRC_ON()
-{
-    uint8_t state = 2;
-    byte config1;
-
-    if( _modem == LORA )
-    { // LORA mode
-
-        // added by C. Pham
-        uint8_t theRegister;
-        uint8_t theCrcBit;
-
-        if (_board==SX1272Chip) {
-            theRegister=REG_MODEM_CONFIG1;
-            theCrcBit=1;
-        }
-        else {
-            theRegister=REG_MODEM_CONFIG2;
-            theCrcBit=2;
-        }
-
-        config1 = readRegister(theRegister);    // Save config1 to modify only the CRC bit
-
-        if (_board==SX1272Chip)
-            config1 = config1 | B00000010;              // sets bit 1 from REG_MODEM_CONFIG1 = CRC_ON
-        else
-            config1 = config1 | B00000100;                               // sets bit 2 from REG_MODEM_CONFIG2 = CRC_ON
-
-        writeRegister(theRegister,config1);
-
-        state = 1;
-
-        config1 = readRegister(theRegister);
-
-        if( bitRead(config1, theCrcBit) == CRC_ON )
-        { // take out bit 1 from REG_MODEM_CONFIG1 indicates RxPayloadCrcOn
-            state = 0;
-            _CRC = CRC_ON;
-        }
-    }
-    else
-    { // FSK mode
-        config1 = readRegister(REG_PACKET_CONFIG1); // Save config1 to modify only the CRC bit
-        config1 = config1 | B00010000;              // set bit 4 and 3 from REG_MODEM_CONFIG1 = CRC_ON
-        writeRegister(REG_PACKET_CONFIG1,config1);
-
-        state = 1;
-
-        config1 = readRegister(REG_PACKET_CONFIG1);
-        if( bitRead(config1, 4) == CRC_ON )
-        { // take out bit 4 from REG_PACKET_CONFIG1 indicates CrcOn
-            state = 0;
-            _CRC = CRC_ON;
-        }
-    }
-    if( state != 0 )
-    {
-        state = 1;
-    }
-    return state;
-}
-
-/*
- Function: Sets the module with CRC off.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-uint8_t SX1272::setCRC_OFF()
-{
-    int8_t state = 2;
-    byte config1;
-
-
-    if( _modem == LORA )
-    { // LORA mode
-
-        // added by C. Pham
-        uint8_t theRegister;
-        uint8_t theCrcBit;
-
-        if (_board==SX1272Chip) {
-            theRegister=REG_MODEM_CONFIG1;
-            theCrcBit=1;
-        }
-        else {
-            theRegister=REG_MODEM_CONFIG2;
-            theCrcBit=2;
-        }
-
-        config1 = readRegister(theRegister);    // Save config1 to modify only the CRC bit
-        if (_board==SX1272Chip)
-            config1 = config1 & B11111101;              // clears bit 1 from config1 = CRC_OFF
-        else
-            config1 = config1 & B11111011;              // clears bit 2 from config1 = CRC_OFF
-
-        writeRegister(theRegister,config1);
-
-        config1 = readRegister(theRegister);
-        if( (bitRead(config1, theCrcBit)) == CRC_OFF )
-        { // take out bit 1 from REG_MODEM_CONFIG1 indicates RxPayloadCrcOn
-            state = 0;
-            _CRC = CRC_OFF;
-        }
-    }
-    else
-    { // FSK mode
-        config1 = readRegister(REG_PACKET_CONFIG1); // Save config1 to modify only the CRC bit
-        config1 = config1 & B11101111;              // clears bit 4 from config1 = CRC_OFF
-        writeRegister(REG_PACKET_CONFIG1,config1);
-
-        config1 = readRegister(REG_PACKET_CONFIG1);
-        if( bitRead(config1, 4) == CRC_OFF )
-        { // take out bit 4 from REG_PACKET_CONFIG1 indicates RxPayloadCrcOn
-            state = 0;
-            _CRC = CRC_OFF;
-        }
-    }
-    if( state != 0 )
-    {
-        state = 1;
-    }
-    return state;
-}
 
 /*
  Function: Checks if SF is a valid value.
@@ -755,7 +412,6 @@ uint8_t SX1272::setSF(uint8_t spr)
             config2 = config2 & B01101111;  // clears bits 7 & 4 from REG_MODEM_CONFIG2
             config2 = config2 | B01100000;  // sets bits 6 & 5 from REG_MODEM_CONFIG2
             // Mandatory headerOFF with SF = 6 (Implicit mode)
-            setHeaderOFF();
 
             // Set the bit field DetectionOptimize of
             // register RegLoRaDetectOptimize to value "0b101".
@@ -803,8 +459,6 @@ uint8_t SX1272::setSF(uint8_t spr)
     // Check if it is neccesary to set special settings for SF=6
     if( spr != SF_6 )
     {
-        // added by C. Pham
-        setHeaderON();
 
         // LoRa detection Optimize: 0x03 --> SF7 to SF12
         writeRegister(REG_DETECT_OPTIMIZE, 0x03);
@@ -882,40 +536,37 @@ uint8_t SX1272::setSF(uint8_t spr)
 boolean SX1272::isBW(uint16_t band)
 {
 
-
-    // Checking available values for _bandwidth
-    // added by C. Pham
     if (_board==SX1272Chip) {
         switch(band)
         {
-        case BW_125:
-        case BW_250:
-        case BW_500:
-            return true;
-            break;
+            case BW_125:
+            case BW_250:
+            case BW_500:
+                return true;
+                break;
 
-        default:
-            return false;
+            default:
+                return false;
         }
     }
     else {
         switch(band)
         {
-        case BW_7_8:
-        case BW_10_4:
-        case BW_15_6:
-        case BW_20_8:
-        case BW_31_25:
-        case BW_41_7:
-        case BW_62_5:
-        case BW_125:
-        case BW_250:
-        case BW_500:
-            return true;
-            break;
+            case BW_7_8:
+            case BW_10_4:
+            case BW_15_6:
+            case BW_20_8:
+            case BW_31_25:
+            case BW_41_7:
+            case BW_62_5:
+            case BW_125:
+            case BW_250:
+            case BW_500:
+                return true;
+                break;
 
-        default:
-            return false;
+            default:
+                return false;
         }
     }
 
@@ -1414,10 +1065,11 @@ uint8_t SX1272::getPower()
 */
 int8_t SX1272::setPower(char p)
 {
-    byte st0;
+     byte st0;
     int8_t state = 2;
     byte value = 0x00;
 
+    p = SX1272_POWER_MAXIMUM; 
     byte RegPaDacReg = (_board==SX1272Chip)?0x5A:0x4D;
 
     st0 = readRegister(REG_OP_MODE);      // Save the previous status
@@ -1427,51 +1079,10 @@ int8_t SX1272::setPower(char p)
         writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);
     }
 
-    switch (p)
-    {
-        // L = low. On SX1272: PA0 on RFO setting
-        // H = high. On SX1272: PA0 on RFO setting
-        // M = MAX. On SX1272: PA0 on RFO setting
-
-        // x = extreme; added by C. Pham. On SX1272: PA1&PA2 PA_BOOST setting
-        // X = eXtreme; added by C. Pham. On SX1272: PA1&PA2 PA_BOOST setting + 20dBm settings
-
-        // added by C. Pham
-        //
-        case 'x':
-        case 'X':
-        case 'M':  _power = 0x0F;
-            // SX1272: 14dBm
-            // SX1276:
-            break;
-
-        // modified by C. Pham, set to 0x02 instead of 0x00
-        case 'L':  _power = 0x02;
-            // SX1272: 1dBm
-            // SX1276:
-            break;
-
-        case 'H':  _power = 0x07;
-            // SX1272: 6dBm
-            // SX1276:
-            break;
-
-        default:   state = -1;
-            break;
-    }
 
     value = _power;
 
-    if (p=='x') 
-    {
-        // we set only the PA_BOOST pin
-        // limit to 14dBm
-        value = 0x0C;
-        value = value | B10000000;
-        // TODO: Have to set RegOcp for OcpOn and OcpTrim
-    }
-    
-    if (p=='X')
+    if (p==SX1272_POWER_MAXIMUM)
      {
         // we set the PA_BOOST pin
         value = value | B10000000;
@@ -1492,83 +1103,10 @@ int8_t SX1272::setPower(char p)
         // set MaxPower to 7 -> Pmax=10.8+0.6*MaxPower [dBm] = 15
         value = value | B01110000;
         // then Pout = Pmax-(15-_power[3:0]) if  PaSelect=0 (RFO pin for +13dBm)
-
         writeRegister(REG_PA_CONFIG, value);
     }
 
     _power=value;
-
-    value = readRegister(REG_PA_CONFIG);
-
-    if( value == _power )
-    {
-        state = 0;
-    }
-    else
-    {
-        state = 1;
-    }
-
-    writeRegister(REG_OP_MODE, st0);    // Getting back to previous status
-    delay(100);
-    return state;
-}
-
-/*
- Function: Sets the signal power indicated in the module.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-   state = -1 --> Forbidden command for this protocol
- Parameters:
-   p: power option to set in configuration.
-*/
-int8_t SX1272::setPowerNum(uint8_t pow)
-{
-    byte st0;
-    int8_t state = 2;
-    byte value = 0x00;
-
-
-    st0 = readRegister(REG_OP_MODE);      // Save the previous status
-    if( _modem == LORA )
-    { // LoRa Stdby mode to write in registers
-        writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);
-    }
-    else
-    { // FSK Stdby mode to write in registers
-        writeRegister(REG_OP_MODE, FSK_STANDBY_MODE);
-    }
-
-    if ( (pow >= 0) & (pow < 15) )
-    {
-        _power = pow;
-    }
-    else
-    {
-        state = -1;
-    }
-
-    // added by C. Pham
-    if (_board==SX1276Chip) {
-        value=readRegister(REG_PA_CONFIG);
-        // clear OutputPower, but keep current value of PaSelect and MaxPower
-        value=value & B11110000;
-        value=value + _power;
-        _power=value;
-    }
-    writeRegister(REG_PA_CONFIG, _power);   // Setting output power value
-    value = readRegister(REG_PA_CONFIG);
-
-    if( value == _power )
-    {
-        state = 0;
-    }
-    else
-    {
-        state = 1;
-    }
 
     writeRegister(REG_OP_MODE, st0);    // Getting back to previous status
     delay(100);
@@ -1585,30 +1123,17 @@ int8_t SX1272::setPowerNum(uint8_t pow)
 */
 uint8_t SX1272::getPreambleLength()
 {
-    int8_t state = 2;
+    int8_t state = 0;
     uint8_t p_length;
 
+    
+    p_length = readRegister(REG_PREAMBLE_MSB_LORA);
+    // Saving MSB preamble length in LoRa mode
+    _preamblelength = (p_length << 8) & 0xFFFF;
+    p_length = readRegister(REG_PREAMBLE_LSB_LORA);
+    // Saving LSB preamble length in LoRa mode
+    _preamblelength = _preamblelength + (p_length & 0xFFFF);
 
-    state = 1;
-    if( _modem == LORA )
-    { // LORA mode
-        p_length = readRegister(REG_PREAMBLE_MSB_LORA);
-        // Saving MSB preamble length in LoRa mode
-        _preamblelength = (p_length << 8) & 0xFFFF;
-        p_length = readRegister(REG_PREAMBLE_LSB_LORA);
-        // Saving LSB preamble length in LoRa mode
-        _preamblelength = _preamblelength + (p_length & 0xFFFF);
-    }
-    else
-    { // FSK mode
-        p_length = readRegister(REG_PREAMBLE_MSB_FSK);
-        // Saving MSB preamble length in FSK mode
-        _preamblelength = (p_length << 8) & 0xFFFF;
-        p_length = readRegister(REG_PREAMBLE_LSB_FSK);
-        // Saving LSB preamble length in FSK mode
-        _preamblelength = _preamblelength + (p_length & 0xFFFF);
-    }
-    state = 0;
     return state;
 }
 
@@ -1625,32 +1150,17 @@ uint8_t SX1272::setPreambleLength(uint16_t l)
 {
     byte st0;
     uint8_t p_length;
-    int8_t state = 2;
+    int8_t state = 0;
 
     st0 = readRegister(REG_OP_MODE);    // Save the previous status
-    state = 1;
-    if( _modem == LORA )
-    { // LoRa mode
-        writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);    // Set Standby mode to write in registers
-        p_length = ((l >> 8) & 0x0FF);
-        // Storing MSB preamble length in LoRa mode
-        writeRegister(REG_PREAMBLE_MSB_LORA, p_length);
-        p_length = (l & 0x0FF);
-        // Storing LSB preamble length in LoRa mode
-        writeRegister(REG_PREAMBLE_LSB_LORA, p_length);
-    }
-    else
-    { // FSK mode
-        writeRegister(REG_OP_MODE, FSK_STANDBY_MODE);    // Set Standby mode to write in registers
-        p_length = ((l >> 8) & 0x0FF);
-        // Storing MSB preamble length in FSK mode
-        writeRegister(REG_PREAMBLE_MSB_FSK, p_length);
-        p_length = (l & 0x0FF);
-        // Storing LSB preamble length in FSK mode
-        writeRegister(REG_PREAMBLE_LSB_FSK, p_length);
-    }
 
-    state = 0;
+    writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);    // Set Standby mode to write in registers
+    p_length = ((l >> 8) & 0x0FF);
+    // Storing MSB preamble length in LoRa mode
+    writeRegister(REG_PREAMBLE_MSB_LORA, p_length);
+    p_length = (l & 0x0FF);
+    // Storing LSB preamble length in LoRa mode
+    writeRegister(REG_PREAMBLE_LSB_LORA, p_length);
 
     writeRegister(REG_OP_MODE, st0);    // Getting back to previous status
     delay(100);
@@ -1666,24 +1176,11 @@ uint8_t SX1272::setPreambleLength(uint16_t l)
 */
 uint8_t SX1272::getPayloadLength()
 {
-    uint8_t state = 2;
+    uint8_t state = 0;
 
+    // Saving payload length in LoRa mode
+    _payloadlength = readRegister(REG_PAYLOAD_LENGTH_LORA);
 
-    if( _modem == LORA )
-    { // LORA mode
-        // Saving payload length in LoRa mode
-        _payloadlength = readRegister(REG_PAYLOAD_LENGTH_LORA);
-        state = 1;
-    }
-    else
-    { // FSK mode
-        // Saving payload length in FSK mode
-        _payloadlength = readRegister(REG_PAYLOAD_LENGTH_FSK);
-        state = 1;
-    }
-
-
-    state = 0;
     return state;
 }
 
@@ -1879,54 +1376,6 @@ int8_t SX1272::getSNR()
 }
 
 /*
- Function: Gets the current value of RSSI.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-uint8_t SX1272::getRSSI()
-{
-    uint8_t state = 2;
-    int rssi_mean = 0;
-    int total = 5;
-
-    if( _modem == LORA )
-    {
-        /// LoRa mode
-        // get mean value of RSSI
-        for(int i = 0; i < total; i++)
-        {
-            // modified by C. Pham
-            // with SX1276 we have to add 20 to OFFSET_RSSI
-            _RSSI = -(OFFSET_RSSI+(_board==SX1276Chip?20:0)) + readRegister(REG_RSSI_VALUE_LORA);
-            rssi_mean += _RSSI;
-        }
-
-        rssi_mean = rssi_mean / total;
-        _RSSI = rssi_mean;
-
-        state = 0;
-    }
-    else
-    {
-        /// FSK mode
-        // get mean value of RSSI
-        for(int i = 0; i < total; i++)
-        {
-            _RSSI = (readRegister(REG_RSSI_VALUE_FSK) >> 1);
-            rssi_mean += _RSSI;
-        }
-        rssi_mean = rssi_mean / total;
-        _RSSI = rssi_mean;
-
-        state = 0;
-
-    }
-    return state;
-}
-
-/*
  Function: Gets the RSSI of the last packet received in LoRa mode.
  Returns: Integer that determines if there has been any error
    state = 2  --> The command has not been executed
@@ -1976,45 +1425,6 @@ int16_t SX1272::getRSSIpacket()
 
 
 /*
- Function: Gets the current supply limit of the power amplifier, protecting battery chemistries.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
- Parameters:
-   rate: value to compute the maximum current supply. Maximum current is 45+5*'rate' [mA]
-*/
-uint8_t SX1272::getMaxCurrent()
-{
-    int8_t state = 2;
-    byte value;
-
-    state = 1;
-    _maxCurrent = readRegister(REG_OCP);
-
-    // extract only the OcpTrim value from the OCP register
-    _maxCurrent &= B00011111;
-
-    if( _maxCurrent <= 15 )
-    {
-        value = (45 + (5 * _maxCurrent));
-    }
-    else if( _maxCurrent <= 27 )
-    {
-        value = (-30 + (10 * _maxCurrent));
-    }
-    else
-    {
-        value = 240;
-    }
-
-    _maxCurrent = value;
-
-    state = 0;
-    return state;
-}
-
-/*
  Function: Limits the current supply of the power amplifier, protecting battery chemistries.
  Returns: Integer that determines if there has been any error
    state = 2  --> The command has not been executed
@@ -2028,8 +1438,6 @@ int8_t SX1272::setMaxCurrent(uint8_t rate)
 {
     int8_t state = 2;
     byte st0;
-
-
 
     // Maximum rate value = 0x1B, because maximum current supply = 240 mA
     if (rate > 0x1B)
@@ -2069,10 +1477,7 @@ int8_t SX1272::setMaxCurrent(uint8_t rate)
 */
 uint8_t SX1272::truncPayload(uint16_t length16)
 {
-    uint8_t state = 2;
-
-    state = 1;
-
+    uint8_t state = 0;
 
     if( length16 > MAX_PAYLOAD )
     {
@@ -2082,91 +1487,10 @@ uint8_t SX1272::truncPayload(uint16_t length16)
     {
         _payloadlength = (length16 & 0xFF);
     }
-    state = 0;
 
     return state;
 }
 
-/*
- Function: It sets an ACK in FIFO in order to send it.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-uint8_t SX1272::setACK()
-{
-    uint8_t state = 2;
-
-    clearFlags();   // Initializing flags
-
-    if( _modem == LORA )
-    { // LoRa mode
-        writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);  // Stdby LoRa mode to write in FIFO
-    }
-    else
-    { // FSK mode
-        writeRegister(REG_OP_MODE, FSK_STANDBY_MODE);   // Stdby FSK mode to write in FIFO
-    }
-
-    // Setting ACK length in order to send it
-    state = setPacketLength(ACK_LENGTH);
-    if( state == 0 )
-    {
-        // Setting ACK
-        ACK.dst = packet_received.src; // ACK destination is packet source
-        ACK.type = PKT_TYPE_ACK;
-        ACK.src = packet_received.dst; // ACK source is packet destination
-        ACK.packnum = packet_received.packnum; // packet number that has been correctly received
-        ACK.length = 2;
-        ACK.data[0] = _reception;   // CRC of the received packet
-        // added by C. Pham
-        // store the SNR
-        ACK.data[1]= readRegister(REG_PKT_SNR_VALUE);
-
-        // Setting address pointer in FIFO data buffer
-        writeRegister(REG_FIFO_ADDR_PTR, 0x80);
-
-        state = 1;
-
-        // Writing ACK to send in FIFO
-        writeRegister(REG_FIFO, ACK.dst);       // Writing the destination in FIFO
-        writeRegister(REG_FIFO, ACK.type);
-        writeRegister(REG_FIFO, ACK.src);       // Writing the source in FIFO
-        writeRegister(REG_FIFO, ACK.packnum);   // Writing the packet number in FIFO
-        writeRegister(REG_FIFO, ACK.length);    // Writing the packet length in FIFO
-        writeRegister(REG_FIFO, ACK.data[0]);   // Writing the ACK in FIFO
-        writeRegister(REG_FIFO, ACK.data[1]);   // Writing the ACK in FIFO
-
-        //#if (SX1272_debug_mode > 0)
-        Serial.println(F("## ACK set and written in FIFO ##"));
-        // Print the complete ACK if debug_mode
-        Serial.println(F("## ACK to send:"));
-        Serial.print(F("Destination: "));
-        Serial.println(ACK.dst);                // Printing destination
-        Serial.print(F("Source: "));
-        Serial.println(ACK.src);                // Printing source
-        Serial.print(F("ACK number: "));
-        Serial.println(ACK.packnum);            // Printing ACK number
-        Serial.print(F("ACK length: "));
-        Serial.println(ACK.length);             // Printing ACK length
-        Serial.print(F("ACK payload: "));
-        Serial.println(ACK.data[0]);            // Printing ACK payload
-        Serial.print(F("ACK SNR last rcv pkt: "));
-        Serial.println(_SNR);
-        Serial.println(F("##"));
-        Serial.println();
-        //#endif
-
-        state = 0;
-        _reception = CORRECT_PACKET;        // Updating value to next packet
-
-        // comment by C. Pham
-        // TODO: do we really need this delay?
-        delay(500);
-    }
-    return state;
-}
 
 /*
  Function: Configures the module to receive information.
@@ -2247,8 +1571,8 @@ uint8_t SX1272::receivePacketMAXTimeout()
 */
 uint8_t SX1272::receivePacketTimeout()
 {
-    setTimeout();
-    return receivePacketTimeout(_sendTime);
+    //setTimeout();
+    return receivePacketTimeout(MAX_TIMEOUT/2);
 }
 
 
@@ -2344,74 +1668,48 @@ boolean SX1272::availableData(uint16_t wait)
     unsigned long previous;
 
     previous = millis();
-    if( _modem == LORA )
-    { // LoRa mode
+
+    value = readRegister(REG_IRQ_FLAGS);
+    // Wait to ValidHeader interrupt
+    while( (bitRead(value, 4) == 0) && (millis() - previous < (unsigned long)wait) )
+    {
         value = readRegister(REG_IRQ_FLAGS);
-        // Wait to ValidHeader interrupt
-        while( (bitRead(value, 4) == 0) && (millis() - previous < (unsigned long)wait) )
+        // Condition to avoid an overflow (DO NOT REMOVE)
+        if( millis() < previous )
         {
-            value = readRegister(REG_IRQ_FLAGS);
+            previous = millis();
+        }
+    } // end while (millis)
+
+    if( bitRead(value, 4) == 1 )
+    { // header received
+
+        _hreceived = true;
+
+
+        while( (header == 0) && (millis() - previous < (unsigned long)wait) )
+        { // Waiting to read first payload bytes from packet
+            header = readRegister(REG_FIFO_RX_BYTE_ADDR);
             // Condition to avoid an overflow (DO NOT REMOVE)
             if( millis() < previous )
             {
                 previous = millis();
             }
-        } // end while (millis)
-
-        if( bitRead(value, 4) == 1 )
-        { // header received
-
-            _hreceived = true;
-
-
-            while( (header == 0) && (millis() - previous < (unsigned long)wait) )
-            { // Waiting to read first payload bytes from packet
-                header = readRegister(REG_FIFO_RX_BYTE_ADDR);
-                // Condition to avoid an overflow (DO NOT REMOVE)
-                if( millis() < previous )
-                {
-                    previous = millis();
-                }
-            }
-
-            if( header != 0 )
-            { // Reading first byte of the received packet
-
-                _destination = readRegister(REG_FIFO);
-            }
         }
-        else
-        {
-            forme = false;
-            _hreceived = false;
+
+        if( header != 0 )
+        { // Reading first byte of the received packet
+
+            _destination = readRegister(REG_FIFO);
         }
     }
     else
-    { // FSK mode
-        value = readRegister(REG_IRQ_FLAGS2);
-        // Wait to Payload Ready interrupt
-        while( (bitRead(value, 2) == 0) && (millis() - previous < wait) )
-        {
-            value = readRegister(REG_IRQ_FLAGS2);
-            // Condition to avoid an overflow (DO NOT REMOVE)
-            if( millis() < previous )
-            {
-                previous = millis();
-            }
-        }// end while (millis)
-        if( bitRead(value, 2) == 1 )    // something received
-        {
-            _hreceived = true;
-
-            // Reading first byte of the received packet
-            _destination = readRegister(REG_FIFO);
-        }
-        else
-        {
-            forme = false;
-            _hreceived = false;
-        }
+    {
+        forme = false;
+        _hreceived = false;
     }
+
+ 
     // We use _hreceived because we need to ensure that _destination value is correctly
     // updated and is not the _destination value from the previously packet
     if( _hreceived == true )
@@ -2441,9 +1739,7 @@ boolean SX1272::availableData(uint16_t wait)
             }
         }
     }
-    //----else
-    //  {
-    //  }
+
     return forme;
 }
 
@@ -2493,108 +1789,59 @@ int8_t SX1272::getPacket(uint16_t wait)
 
 
     previous = millis();
-    if( _modem == LORA )
-    { // LoRa mode
+
+    value = readRegister(REG_IRQ_FLAGS);
+    // Wait until the packet is received (RxDone flag) or the timeout expires
+    while( (bitRead(value, 6) == 0) && (millis() - previous < (unsigned long)wait) )
+    {
         value = readRegister(REG_IRQ_FLAGS);
-        // Wait until the packet is received (RxDone flag) or the timeout expires
-        while( (bitRead(value, 6) == 0) && (millis() - previous < (unsigned long)wait) )
+        // Condition to avoid an overflow (DO NOT REMOVE)
+        if( millis() < previous )
         {
-            value = readRegister(REG_IRQ_FLAGS);
-            // Condition to avoid an overflow (DO NOT REMOVE)
-            if( millis() < previous )
-            {
-                previous = millis();
-            }
-        } // end while (millis)
-
-        if( (bitRead(value, 6) == 1) && (bitRead(value, 5) == 0) )
-        { // packet received & CRC correct
-            p_received = true;  // packet correctly received
-            _reception = CORRECT_PACKET;
-
+            previous = millis();
         }
-        else
-        {
-            if( bitRead(value, 5) != 0 )
-            { // CRC incorrect
-                _reception = INCORRECT_PACKET;
-                state = 3;
+    } // end while (millis)
 
-            }
-        }
-        //writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);    // Setting standby LoRa mode
+    if( (bitRead(value, 6) == 1) && (bitRead(value, 5) == 0) )
+    { // packet received & CRC correct
+        p_received = true;  // packet correctly received
+        _reception = CORRECT_PACKET;
+
     }
+    else
+    {
+        if( bitRead(value, 5) != 0 )
+        { // CRC incorrect
+            _reception = INCORRECT_PACKET;
+            state = 3;
 
+        }
+    }
+    //writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);    // Setting standby LoRa mode
 
     if( p_received == true )
     {
         // Store the packet
-        if( _modem == LORA )
-        {
-            // comment by C. Pham
-            // set the FIFO addr to 0 to read again all the bytes
-            writeRegister(REG_FIFO_ADDR_PTR, 0x00);     // Setting address pointer in FIFO data buffer
+  
+        // comment by C. Pham
+        // set the FIFO addr to 0 to read again all the bytes
+        writeRegister(REG_FIFO_ADDR_PTR, 0x00);     // Setting address pointer in FIFO data buffer
 
-
-            //modified by C. Pham
-            if (!_rawFormat)
-                packet_received.dst = readRegister(REG_FIFO);   // Storing first byte of the received packet
-            else
-                packet_received.dst = 0;
-        }
-        else
-        {
-            value = readRegister(REG_PACKET_CONFIG1);
-            if( (bitRead(value, 2) == 0) && (bitRead(value, 1) == 0) )
-            {
-                packet_received.dst = readRegister(REG_FIFO); // Storing first byte of the received packet
-            }
-            else
-            {
-                packet_received.dst = _destination;         // Storing first byte of the received packet
-            }
-        }
-
-        // modified by C. Pham
-        if (!_rawFormat) {
-            packet_received.type = readRegister(REG_FIFO);      // Reading second byte of the received packet
-            packet_received.src = readRegister(REG_FIFO);       // Reading second byte of the received packet
-            packet_received.packnum = readRegister(REG_FIFO);   // Reading third byte of the received packet
-            //packet_received.length = readRegister(REG_FIFO);  // Reading fourth byte of the received packet
-        }
-        else {
-            packet_received.type = 0;
-            packet_received.src = 0;
-            packet_received.packnum = 0;
-        }
+        packet_received.dst = readRegister(REG_FIFO);   // Storing first byte of the received packet
+       
+        packet_received.type = readRegister(REG_FIFO);      // Reading second byte of the received packet
+        packet_received.src = readRegister(REG_FIFO);       // Reading second byte of the received packet
+        packet_received.packnum = readRegister(REG_FIFO);   // Reading third byte of the received packet
 
         packet_received.length = readRegister(REG_RX_NB_BYTES);
 
-        if( _modem == LORA )
+        _payloadlength=packet_received.length;
+       
+        for(unsigned int i = 0; i < _payloadlength; i++)
         {
-            if (_rawFormat) {
-                _payloadlength=packet_received.length;
-            }
-            else
-                _payloadlength = packet_received.length - OFFSET_PAYLOADLENGTH;
+            packet_received.data[i] = readRegister(REG_FIFO); // Storing payload
         }
-        if( packet_received.length > (MAX_LENGTH + 1) )
-        {
-
-        }
-        else
-        {
-            for(unsigned int i = 0; i < _payloadlength; i++)
-            {
-                packet_received.data[i] = readRegister(REG_FIFO); // Storing payload
-            }
-
-            // commented by C. Pham
-            //packet_received.retry = readRegister(REG_FIFO);
-
-            state = 0;
-
-        }
+        state = 0;
     }
     else
     {
@@ -2609,10 +1856,8 @@ int8_t SX1272::getPacket(uint16_t wait)
         }
     }
 
-    if( _modem == LORA )
-    {
-        writeRegister(REG_FIFO_ADDR_PTR, 0x00);  // Setting address pointer in FIFO data buffer
-    }
+    writeRegister(REG_FIFO_ADDR_PTR, 0x00);  // Setting address pointer in FIFO data buffer
+
     clearFlags();   // Initializing flags
     if( wait > MAX_WAIT )
     {
@@ -2634,55 +1879,15 @@ int8_t SX1272::getPacket(uint16_t wait)
 */
 int8_t SX1272::setDestination(uint8_t dest)
 {
-    int8_t state = 2;
-    state = 1;
+    int8_t state = 0;
+
     _destination = dest; // Storing destination in a global variable
     packet_sent.dst = dest;  // Setting destination in packet structure
     packet_sent.src = _nodeAddress; // Setting source in packet structure
     packet_sent.packnum = _packetNumber;    // Setting packet number in packet structure
     _packetNumber++;
-    state = 0;
 
     return state;
-}
-
-
-/*
- Function: It sets a char array payload packet in a packet struct.
- Returns:  Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-uint8_t SX1272::setPayload(char *payload)
-{
-    uint8_t state = 2;
-    uint8_t state_f = 2;
-    uint16_t length16;
-
-    state = 1;
-    length16 = (uint16_t)strlen(payload);
-    state = truncPayload(length16);
-    if( state == 0 )
-    {
-        // fill data field until the end of the string
-        for(unsigned int i = 0; i < _payloadlength; i++)
-        {
-            packet_sent.data[i] = payload[i];
-        }
-    }
-    else
-    {
-        state_f = state;
-    }
-    if( ( _modem == FSK ) && ( _payloadlength > MAX_PAYLOAD_FSK ) )
-    {
-        _payloadlength = MAX_PAYLOAD_FSK;
-        state = 1;
-    }
-    // set length with the actual counter value
-    state_f = setPacketLength();    // Setting packet length in packet structure
-    return state_f;
 }
 
 /*
@@ -2713,81 +1918,6 @@ uint8_t SX1272::setPayload(uint8_t *payload)
 }
 
 /*
- Function: It sets a packet struct in FIFO in order to send it.
- Returns:  Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-uint8_t SX1272::setPacket(uint8_t dest, char *payload)
-{
-    int8_t state = 2;
-
-    clearFlags();   // Initializing flags
-
-    if( _modem == LORA )
-    { // LoRa mode
-        writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);  // Stdby LoRa mode to write in FIFO
-    }
-    else
-    { // FSK mode
-        writeRegister(REG_OP_MODE, FSK_STANDBY_MODE);   // Stdby FSK mode to write in FIFO
-    }
-
-    _reception = CORRECT_PACKET;    // Updating incorrect value
-    if( _retries == 0 )
-    { // Updating this values only if is not going to re-send the last packet
-        state = setDestination(dest);   // Setting destination in packet structure
-        packet_sent.retry = _retries;
-        if( state == 0 )
-        {
-            state = setPayload(payload);
-        }
-    }
-    else
-    {
-        // comment by C. Pham
-        // why to increase the length here?
-        // bug?
-        if( _retries == 1 )
-        {
-            packet_sent.length++;
-        }
-        state = setPacketLength();
-        packet_sent.retry = _retries;
-    }
-
-    // added by C. Pham
-    // set the type to be a data packet
-    packet_sent.type |= PKT_TYPE_DATA;
-
-
-    writeRegister(REG_FIFO_ADDR_PTR, 0x80);  // Setting address pointer in FIFO data buffer
-    if( state == 0 )
-    {
-        state = 1;
-        // Writing packet to send in FIFO
-
-        writeRegister(REG_FIFO, packet_sent.dst);       // Writing the destination in FIFO
-        // added by C. Pham
-        writeRegister(REG_FIFO, packet_sent.type);      // Writing the packet type in FIFO
-        writeRegister(REG_FIFO, packet_sent.src);       // Writing the source in FIFO
-        writeRegister(REG_FIFO, packet_sent.packnum);   // Writing the packet number in FIFO
-        // commented by C. Pham
-        //writeRegister(REG_FIFO, packet_sent.length);  // Writing the packet length in FIFO
-        for(unsigned int i = 0; i < _payloadlength; i++)
-        {
-            writeRegister(REG_FIFO, packet_sent.data[i]);  // Writing the payload in FIFO
-        }
-        // commented by C. Pham
-        //writeRegister(REG_FIFO, packet_sent.retry);       // Writing the number retry in FIFO
-        state = 0;
-    }
-
-    return state;
-}
-
-/*
  Function: It sets a packet struct in FIFO in order to sent it.
  Returns:  Integer that determines if there has been any error
    state = 2  --> The command has not been executed
@@ -2803,11 +1933,8 @@ uint8_t SX1272::setPacket(uint8_t dest, uint8_t *payload)
     st0 = readRegister(REG_OP_MODE);    // Save the previous status
     clearFlags();   // Initializing flags
 
-    if( _modem == LORA )
-    { // LoRa mode
-        writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);  // Stdby LoRa mode to write in FIFO
-    }
-
+    writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);  // Stdby LoRa mode to write in FIFO
+  
 
     _reception = CORRECT_PACKET;    // Updating incorrect value to send a packet (old or new)
     if( _retries == 0 )
@@ -2837,7 +1964,6 @@ uint8_t SX1272::setPacket(uint8_t dest, uint8_t *payload)
     // set the type to be a data packet
     packet_sent.type |= PKT_TYPE_DATA;
 
-
     writeRegister(REG_FIFO_ADDR_PTR, 0x80);  // Setting address pointer in FIFO data buffer
     if( state == 0 )
     {
@@ -2864,7 +1990,6 @@ uint8_t SX1272::setPacket(uint8_t dest, uint8_t *payload)
     return state;
 }
 
-
 /*
  Function: Configures the module to transmit information.
  Returns: Integer that determines if there has been any error
@@ -2879,16 +2004,18 @@ uint8_t SX1272::sendWithTimeout(uint16_t wait)
     unsigned long previous;
 
 
+
+    // clearFlags();    // Initializing flags
+
     // wait to TxDone flag
     previous = millis();
+
     clearFlags();   // Initializing flags
 
     writeRegister(REG_OP_MODE, LORA_TX_MODE);  // LORA mode - Tx
 
     value = readRegister(REG_IRQ_FLAGS);
     // Wait until the packet is sent (TX Done flag) or the timeout expires
-
-    // very dumb wait
     while ((bitRead(value, 3) == 0) && (millis() - previous < wait))
     {
         value = readRegister(REG_IRQ_FLAGS);
@@ -2897,10 +2024,10 @@ uint8_t SX1272::sendWithTimeout(uint16_t wait)
         {
             previous = millis();
         }
-        delay(1);
     }
     state = 1;
-  
+
+
 
     if( bitRead(value, 3) == 1 )
     {
@@ -2909,11 +2036,28 @@ uint8_t SX1272::sendWithTimeout(uint16_t wait)
 
 
     clearFlags();       // Initializing flags
-
     return state;
 }
 
 
+/*
+ Function: Configures the module to transmit information.
+ Returns: Integer that determines if there has been any error
+   state = 2  --> The command has not been executed
+   state = 1  --> There has been an error while executing the command
+   state = 0  --> The command has been executed with no errors
+*/
+uint8_t SX1272::sendPacketTimeout(uint8_t dest, char *payload)
+{
+    uint8_t state = 2;
+
+    state = setPacket(dest, payload);   // Setting a packet with 'dest' destination
+    if (state == 0)                             // and writing it in FIFO.
+    {
+        state = sendWithTimeout();  // Sending the packet
+    }
+    return state;
+}
 
 /*
  Function: Configures the module to transmit information.
@@ -2932,13 +2076,13 @@ uint8_t SX1272::sendPacketTimeout(uint8_t dest, uint8_t *payload, uint16_t lengt
 
     error = setPacket(dest, payload); // Setting a packet with 'dest' destination
                                           // and writing it in FIFO.
-      setTimeout();
-     sendWithTimeout(MAX_TIMEOUT);
+    
 
-   // error = sendWithTimeout();    // Sending the packet
+    error = sendWithTimeout();    // Sending the packet
 
     return error;
 }
+
 
 
 /*
@@ -2988,9 +2132,7 @@ uint8_t SX1272::getTemp()
 void SX1272::setPacketType(uint8_t type)
 {
     packet_sent.type=type;
-
-    if (type & PKT_FLAG_ACK_REQ)
-        _requestACK=1;
+    return; 
 }
 
 
@@ -3007,33 +2149,23 @@ void SX1272::setPacketType(uint8_t type)
 */
 int8_t  SX1272::setSyncWord(uint8_t sw)
 {
+    int8_t error =0; 
     byte st0;
-    int8_t state = 2;
     byte config1;
 
     st0 = readRegister(REG_OP_MODE);        // Save the previous status
-
-
     writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);      // Set Standby mode to write in registers
 
-    writeRegister(REG_SYNC_WORD, sw);
 
-    delay(100);
-
-    config1 = readRegister(REG_SYNC_WORD);
-
-    if (config1==sw) {
-        state=0;
+    error = writeReadRegister(REG_SYNC_WORD, sw);
+    if(error == 0)
+    {
         _syncWord = sw;
-    }
-    else {
-        state=1;
-
     }
 
     writeRegister(REG_OP_MODE,st0); // Getting back to previous status
     delay(100);
-    return state;
+    return error;
 }
 
 
