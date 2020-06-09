@@ -66,6 +66,20 @@ int loraMode=LORAMODE;
 
 uint8_t my_appKey[4]={5, 6, 7, 8};
 
+const byte interruptPin = 2;
+
+ 
+typedef enum {
+    TX_NONE                                      = 0,
+    TX_COMPLETE                                  = 1,
+    TX_IN_TRANSMISSION                           = 2,
+    TX_ERROR                                     = 3,
+} SX127X_TX_Packet_States;
+
+
+
+volatile SX127X_TX_Packet_States tx_state =TX_NONE; 
+
 void setup()
 {
   int e;
@@ -124,7 +138,10 @@ void setup()
   
   // Print a success message
   Serial.println(F("SX1272 successfully configured"));
-
+ 
+  pinMode(interruptPin, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(interruptPin), blink, FALLING);
+  
 
   delay(500);
 }
@@ -138,12 +155,11 @@ void loop(void)
   uint8_t app_key_offset=0;
   int e;
 
+  tx_state = TX_COMPLETE; 
 
-
-  if (millis()-lastTransmissionTime > delayBeforeTransmit) {
-
-
-
+  delay(100);
+  if (tx_state == TX_COMPLETE) 
+  {
       int value = analogRead(TEMP_PIN_READ);
 
       // change here how the temperature should be computed depending on your sensor type
@@ -159,11 +175,7 @@ void loop(void)
       Serial.print(F("(Temp is "));
       Serial.println(temp);
 
-
-
       uint8_t r_size;
-
-
 
       r_size=sprintf((char*)message+app_key_offset, "\\!#%d#%d", field_index, (int)temp);  
 
@@ -175,7 +187,7 @@ void loop(void)
       
       int pl=r_size+app_key_offset;
   
-      
+
       startSend=millis();
 
       // indicate that we have an appkey
@@ -185,7 +197,7 @@ void loop(void)
       // Send message to the gateway and print the result
       // with the app key if this feature is enabled
       e = sx1272.sendPacketTimeout(DEFAULT_DEST_ADDR, message, pl);
-
+     
       endSend=millis();
   
       Serial.print(F("LoRa pkt seq "));
@@ -207,7 +219,24 @@ void loop(void)
 
 }
 
+   
+void blink() {
+  uint8_t e =0;
+  Serial.println("rx packet."); 
 
+  switch(tx_state)
+  {
+    case TX_COMPLETE: 
+      tx_state = TX_IN_TRANSMISSION;
+      break;
+      
+    case TX_IN_TRANSMISSION: 
+      tx_state = TX_COMPLETE;
+      break;
+      
+  }
+          
+}
 
 /**
  * @brief      called by cdc_usbd libraries, will be called every time a packet is received on the cdc lines 

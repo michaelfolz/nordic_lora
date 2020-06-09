@@ -310,7 +310,7 @@ void setup()
   
   
   pinMode(interruptPin, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(interruptPin), blink, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(interruptPin), blink, RISING);
   
   delay(1000);
 
@@ -325,13 +325,13 @@ void loop(void)
   receivedFromLoRa=false;
 
   sx1272.receive();
-      
+   e=  sx1272.availableData(0);
   while (radioON) 
   {
-       delay(1000);   
+       delay(100);   
        
-       e=  sx1272.availableData(0);
-       PRINT_STR("%s","wait again");
+      // e=  sx1272.availableData(0);
+      // PRINT_STR("%s","wait again");
 
       if (rx_packet) 
       {
@@ -341,7 +341,7 @@ void loop(void)
           
         rx_packet = 0;
       
-        
+        sx1272.availableData(0); 
        sx1272.receive();
       }  
   }  
