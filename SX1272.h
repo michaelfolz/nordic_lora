@@ -32,7 +32,6 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <Arduino.h>
-#include <SPI.h>
 
 #ifndef inttypes_h
 #include <inttypes.h>
