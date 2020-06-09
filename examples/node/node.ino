@@ -18,7 +18,8 @@
  *
  *****************************************************************************
  */
- 
+ // and SPI library on Arduino platforms
+#include <SPI.h>
 // Include the SX1272
 #include "SX1272.h"
 SX1272 sx1272 = SX1272();
@@ -69,7 +70,11 @@ void setup()
 {
   int e;
   
-
+      // MSB, mode 0, 2Mhz 
+  SPI.begin();
+  SPI.setBitOrder(MSBFIRST);
+  SPI.setClockDivider(SPI_CLOCK_DIV8);
+  SPI.setDataMode(SPI_MODE0);
 
   // for the temperature sensor
   pinMode(TEMP_PIN_READ, INPUT);
@@ -200,4 +205,47 @@ void loop(void)
       delayBeforeTransmit=1000+random(15,60)*100;
   }
 
+}
+
+
+
+/**
+ * @brief      called by cdc_usbd libraries, will be called every time a packet is received on the cdc lines 
+ *
+ * @return     { description_of_the_return_value }
+ */
+uint8_t cdc_recieved_packet(uint8_t * p_buff, size_t size)
+{ 
+    uint8_t err =0; 
+    Serial.println("cdc_recieved_packet."); 
+    return err; 
+}
+
+
+
+uint8_t gpio_mode(uint8_t pin, uint8_t mode)
+{ 
+    pinMode(pin,mode);
+    return 1;
+}
+
+uint8_t gpio_write(uint8_t pin, uint8_t data)
+{ 
+    digitalWrite(pin,data);
+    return 1;
+}
+
+
+uint8_t spi_txrx_byte(uint8_t byte)
+{ 
+    uint8_t retbyte = SPI.transfer(byte);
+    // this function must be overridden by the application software. 
+    return retbyte;
+}
+
+uint8_t delay_ms(uint16_t delayms)
+{ 
+    // this function must be overridden by the application software. 
+    delay(delayms);
+    return 1;
 }

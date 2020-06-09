@@ -260,6 +260,13 @@ void setup()
   int e;
 
   delay(3000);
+
+      // MSB, mode 0, 2Mhz 
+  SPI.begin();
+  SPI.setBitOrder(MSBFIRST);
+  SPI.setClockDivider(SPI_CLOCK_DIV8);
+  SPI.setDataMode(SPI_MODE0);
+
   randomSeed(analogRead(14));
 
   // Open serial communications and wait for port to open:
@@ -277,17 +284,6 @@ void setup()
   PRINT_CSTSTR("%s","^$**********Power ON: state ");
   PRINT_VALUE("%d", e);
   PRINTLN;
-
-  e = sx1272.getSyncWord();
-
-  if (!e) 
-  {
-    PRINT_CSTSTR("%s","^$Default sync word: 0x");
-
-    Serial.print(sx1272._syncWord, HEX);
- 
-    PRINTLN;
-  }    
 
   if (optSW!=0x12) {
     e = sx1272.setSyncWord(optSW);
@@ -383,3 +379,47 @@ void loop(void)
       }  
   }  
 } 
+
+
+/**
+ * @brief      called by cdc_usbd libraries, will be called every time a packet is received on the cdc lines 
+ *
+ * @return     { description_of_the_return_value }
+ */
+uint8_t cdc_recieved_packet(uint8_t * p_buff, size_t size)
+{ 
+    uint8_t err =0; 
+    Serial.println("cdc_recieved_packet."); 
+    return err; 
+}
+
+
+
+uint8_t gpio_mode(uint8_t pin, uint8_t mode)
+{ 
+    pinMode(pin,mode);
+    return 1;
+}
+
+uint8_t gpio_write(uint8_t pin, uint8_t data)
+{ 
+    digitalWrite(pin,data);
+    return 1;
+}
+
+
+uint8_t spi_txrx_byte(uint8_t byte)
+{ 
+    uint8_t retbyte = SPI.transfer(byte);
+    // this function must be overridden by the application software. 
+    return retbyte;
+}
+
+
+
+uint8_t delay_ms(uint16_t delayms)
+{ 
+    // this function must be overridden by the application software. 
+    delay(delayms);
+    return 1;
+}
