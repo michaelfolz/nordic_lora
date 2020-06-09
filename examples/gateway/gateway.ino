@@ -119,6 +119,11 @@ int freeMemory () {
 #endif
 
 
+
+const byte ledPin = 13;
+const byte interruptPin = 3;
+
+
 void startConfig() {
 
   int e;
@@ -255,6 +260,7 @@ void startConfig() {
  
 }
 
+volatile uint8_t rx_packet =0 ;
 void setup()
 {
   int e;
@@ -300,6 +306,11 @@ void setup()
     radioON=true;
     startConfig();
   }
+
+  
+  
+  pinMode(interruptPin, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(interruptPin), blink, CHANGE);
   
   delay(1000);
 
@@ -313,69 +324,25 @@ void loop(void)
 
   receivedFromLoRa=false;
 
-
-  if (radioON) 
-  {
-       delay(100);
-
-      uint16_t w_timer=1000;
+  sx1272.receive();
       
-      if (loraMode==1)
-        w_timer=2500;
-        
-      e=1;
+  while (radioON) 
+  {
+       delay(1000);   
+       
+       e=  sx1272.availableData(0);
+       PRINT_STR("%s","wait again");
 
-
-      e = sx1272.receivePacketTimeout(w_timer);      
-    PRINT_STR("%s","wait again");
-
-      if (!e) 
+      if (rx_packet) 
       {
-         int a=0, b=0;
-         uint8_t tmp_length;
-
-         receivedFromLoRa=true;
-         sx1272.getSNR();
-         sx1272.getRSSIpacket();
-
-         tmp_length=sx1272._payloadlength;
-         
-         sprintf(sprintf_buf,"--- rxlora. dst=%d type=0x%.2X src=%d seq=%d len=%d SNR=%d RSSIpkt=%d BW=%d CR=4/%d SF=%d\n", 
-                   sx1272.packet_received.dst,
-                   sx1272.packet_received.type, 
-                   sx1272.packet_received.src,
-                   sx1272.packet_received.packnum,
-                   tmp_length, 
-                   sx1272._SNR,
-                   sx1272._RSSIpacket,
-                   (sx1272._bandwidth==BW_125)?125:((sx1272._bandwidth==BW_250)?250:500),
-                   sx1272._codingRate+4,
-                   sx1272._spreadingFactor);
-                   
-         PRINT_STR("%s",sprintf_buf);
-
-         // provide a short output for external program to have information about the received packet
-         // ^psrc_id,seq,len,SNR,RSSI
-         sprintf(sprintf_buf,"^p%d,%d,%d,%d,%d,%d,%d\n",
-                   sx1272.packet_received.dst,
-                   sx1272.packet_received.type,                   
-                   sx1272.packet_received.src,
-                   sx1272.packet_received.packnum, 
-                   tmp_length,
-                   sx1272._SNR,
-                   sx1272._RSSIpacket);
-                   
-         PRINT_STR("%s",sprintf_buf);          
-
-         // ^rbw,cr,sf
-         sprintf(sprintf_buf,"^r%d,%d,%d\n", 
-                   (sx1272._bandwidth==BW_125)?125:((sx1272._bandwidth==BW_250)?250:500),
-                   sx1272._codingRate+4,
-                   sx1272._spreadingFactor);
-                   
-         PRINT_STR("%s",sprintf_buf);  
-
-    
+         // If packet received, getPacket
+       
+         PRINT_STR("%s","RX packet time");
+          
+        rx_packet = 0;
+      
+        
+       sx1272.receive();
       }  
   }  
 } 
@@ -422,4 +389,14 @@ uint8_t delay_ms(uint16_t delayms)
     // this function must be overridden by the application software. 
     delay(delayms);
     return 1;
+}
+
+
+void blink() {
+  uint8_t e =0;
+  Serial.println("rx packet."); 
+  e=sx1272.getPacket();
+  if(!e)
+         rx_packet = 1; 
+          
 }
