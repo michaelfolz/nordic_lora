@@ -450,7 +450,7 @@ public:
     It stores in global '_LORA' variable '1' when success
     \return '0' on success, '1' otherwise
      */
-    uint8_t setLORA();
+    int8_t setLORA();
 
     //! It sets the FSK mode on.
     /*!
@@ -646,7 +646,7 @@ public:
     It stores in global '_preamblelength' variable the preamble length
     \return '0' on success, '1' otherwise
      */
-    uint8_t getPreambleLength();
+    uint16_t getPreambleLength();
 
     //! It sets the preamble length.
     /*!
@@ -654,7 +654,7 @@ public:
     \param uint16_t l : preamble length to set in the configuration.
     \return '0' on success, '1' otherwise
      */
-    uint8_t setPreambleLength(uint16_t l);
+    int8_t setPreambleLength(uint16_t l);
 
     //! It gets the payload length of the last packet to send/receive.
     /*!
@@ -681,11 +681,6 @@ public:
      */
     int8_t setPacketLength(uint8_t l);
 
-    //! It gets the node address of the mote.
-    /*!
-    It stores in global '_nodeAddress' variable the node address
-    \return '0' on success, '1' otherwise
-     */
     uint8_t getNodeAddress();
 
     //! It sets the node address of the mote.
@@ -1239,12 +1234,7 @@ public:
     */
     int16_t _RSSIpacket;
 
-    //! Variable : preamble length sent/received.
-    //!
-    /*!
-    */
-    uint16_t _preamblelength;
-
+ 
     //! Variable : payload length sent/received.
     //!
     /*!

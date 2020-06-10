@@ -17,6 +17,38 @@
 #define REG_IRQ_FHSS_CHANGE_CHAN                 0x02
 #define REG_IRQ_CAD_CHAECKED                     0x01
 
+
+uint8_t SX127X_SpreadFactor[11] =
+{
+    0x00,          // not a valid SF
+    (SF_12),       // SF = 12
+    (SF_12),       // SF = 12
+    (SF_10),       // SF = 10
+    (SF_12),       // SF = 12
+    (SF_10),       // SF = 10
+    (SF_11),       // SF = 11
+    (SF_9),        // SF = 9
+    (SF_9),        // SF = 9
+    (SF_8),        // SF = 8
+    (SF_7)         // SF = 7
+};
+
+uint8_t SX127X_Bandwidth[11] = 
+{
+    0x00,                // not a valid bw
+    (BW_125),            // BW = 125 KHz           
+    (BW_250),            // BW = 250 KHz           
+    (BW_125),            // BW = 125 KHz           
+    (BW_500),            // BW = 500 KHz           
+    (BW_250),            // BW = 250 KHz           
+    (BW_500),            // BW = 500 KHz           
+    (BW_250),            // BW = 250 KHz           
+    (BW_500),            // BW = 500 KHz           
+    (BW_500),            // BW = 500 KHz           
+    (BW_500)             // BW = 500 KHz           
+};
+
+
 __attribute__((weak)) uint8_t spi_txrx_byte(uint8_t byte)
 { 
     // this function must be overridden by the application software. 
@@ -52,39 +84,11 @@ SX1272::SX1272()
     _codingRate = CR_5;
     _spreadingFactor = SF_7;
     _channel = CH_12_900;
-    _header = HEADER_ON;
-    _CRC = CRC_OFF;
     _power = 15;
     _packetNumber = 0;
-    _reception = CORRECT_PACKET;
-    _retries = 0;
-    // added by C. Pham
     _syncWord=0x12;
-    _rawFormat=false;
-    _extendedIFS=true;
-    _RSSIonSend=true;
-    // disabled by default
-    _enableCarrierSense=false;
-    // DIFS by default
-    _send_cad_number=9;
-
-    // end
-    _maxRetries = 3;
-    packet_sent.retry = _retries;
 };
 
-
-/*
- Function: Configures the module to transmit information.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-uint8_t SX1272::sendWithTimeout()
-{
-    return sendWithTimeout(MAX_TIMEOUT);
-}
 
 
 /*
@@ -103,7 +107,7 @@ uint8_t SX1272::ON()
 
     delay_ms(100);
 
-    // added by C. Pham
+    
     gpio_mode(SX1272_RST,OUTPUT);
 
     // request device reset 
@@ -189,9 +193,15 @@ void SX1272::writeRegister(byte address, byte data)
     spi_txrx_byte(address);
     spi_txrx_byte(data);
     gpio_write(SX1272_SS,HIGH);
-
+    return; 
 }
 
+/**
+ * Function: writes & read to the indicated register return 0 if equal
+ * @param  address  address
+ * @param  data     byte to write
+ * @return          0 if equal
+ */
 int8_t SX1272::writeReadRegister(byte address, byte data)
 {
     int8_t error =0; 
@@ -208,10 +218,11 @@ int8_t SX1272::writeReadRegister(byte address, byte data)
     return error; 
 }
 
-/*
- Function: Clears the interruption flags
- Returns: Nothing
-*/
+
+/**
+ * Function: Clears the interruption flags
+ * @return Nothing
+ */
 int8_t SX1272::clearFlags()
 {
      int8_t error =0;
@@ -237,14 +248,12 @@ int8_t SX1272::clearFlags()
     return error; 
 }
 
-/*
- Function: Sets the module in LoRa mode.
- Returns:  Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-uint8_t SX1272::setLORA()
+
+/**
+ * Function: requests SX127X module to be setup in lora mode 
+ * @return error state
+ */
+int8_t SX1272::setLORA()
 {
     uint8_t retry=0;
     uint8_t error = 0;
@@ -274,6 +283,7 @@ uint8_t SX1272::setLORA()
 
 
 
+
 int8_t SX1272::setMode(uint8_t mode)
 {
     int8_t error = 0;
@@ -283,73 +293,9 @@ int8_t SX1272::setMode(uint8_t mode)
     st0 = readRegister(REG_OP_MODE);        // Save the previous status
     writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);  // LoRa standby mode
 
-    switch (mode)
-    {
-        // mode 1 (better reach, medium time on air)
-        case 1:            
-            spreadingFactor = (SF_12);       // SF = 12
-            bandwidth = (BW_125);            // BW = 125 KHz
-            break;
-
-        // mode 2 (medium reach, less time on air)
-        case 2:            
-            spreadingFactor = (SF_12);       // SF = 12
-            bandwidth = (BW_250);            // BW = 250 KHz
-            break;
-
-        // mode 3 (worst reach, less time on air)
-        case 3:            
-            spreadingFactor = (SF_10);       // SF = 10
-            bandwidth = (BW_125);            // BW = 125 KHz
-            break;
-
-        // mode 4 (better reach, low time on air)
-        case 4:            
-            spreadingFactor = (SF_12);       // SF = 12
-            bandwidth = (BW_500);            // BW = 500 KHz
-            break;
-
-        // mode 5 (better reach, medium time on air)
-        case 5:            
-            spreadingFactor = (SF_10);       // SF = 10
-            bandwidth = (BW_250);            // BW = 250 KHz
-            break;
-
-        // mode 6 (better reach, worst time-on-air)
-        case 6:            
-            spreadingFactor = (SF_11);       // SF = 11
-            bandwidth = (BW_500);            // BW = 500 KHz
-            break;
-
-        // mode 7 (medium-high reach, medium-low time-on-air)
-        case 7:            
-            spreadingFactor = (SF_9);        // SF = 9
-            bandwidth = (BW_250);            // BW = 250 KHz
-            break;
-
-            // mode 8 (medium reach, medium time-on-air)
-        case 8:           
-            spreadingFactor = (SF_9);        // SF = 9
-            bandwidth = (BW_500);            // BW = 500 KHz
-            break;
-
-        // mode 9 (medium-low reach, medium-high time-on-air)
-        case 9:            
-            spreadingFactor = (SF_8);        // SF = 8
-            bandwidth = (BW_500);            // BW = 500 KHz
-            break;
-
-        // mode 10 (worst reach, less time_on_air)
-        case 10:            
-            spreadingFactor = (SF_7);        // SF = 7
-            bandwidth = (BW_500);            // BW = 500 KHz
-            break;
-
-        default:    
-            error = -1; // The indicated mode doesn't exist
-
-    };
-
+    spreadingFactor = SX127X_SpreadFactor[mode];
+    bandwidth = SX127X_Bandwidth[mode];
+    
     setCR(CR_5);     // always set the coding rate to 5
     setSF(spreadingFactor);       // set the spreading factor
     setBW(bandwidth);      // Set the bandwidth 
@@ -418,6 +364,8 @@ int8_t  SX1272::getSF()
  
     return state;
 }
+
+
 
 /*
  Function: Sets the indicated SF in the module.
@@ -503,7 +451,7 @@ uint8_t SX1272::setSF(uint8_t spr)
         writeRegister(REG_DETECTION_THRESHOLD, 0x0A);
     }
 
-    // added by C. Pham
+    
     if (_board==SX1272Chip) {
         // comment by C. Pham
         // bit 9:8 of SymbTimeout are then 11
@@ -511,7 +459,7 @@ uint8_t SX1272::setSF(uint8_t spr)
         // why?
         // sets bit 2-0 (AgcAutoOn and SymbTimout) for any SF value
         //config2 = config2 | B00000111;
-        // modified by C. Pham
+        
         config2 = config2 | B00000100;
         writeRegister(REG_MODEM_CONFIG1, config1);      // Update config1
     }
@@ -527,7 +475,7 @@ uint8_t SX1272::setSF(uint8_t spr)
 
     delay_ms(100);
 
-    // added by C. Pham
+    
     byte configAgc;
     uint8_t theLDRBit;
 
@@ -550,7 +498,7 @@ uint8_t SX1272::setSF(uint8_t spr)
         theLDRBit=3;
     }
 
-      writeRegister(REG_OP_MODE, st0);    // Getting back to previous status
+    writeRegister(REG_OP_MODE, st0);    // Getting back to previous status
     delay_ms(100);
 
     if( isSF(spr) )
@@ -608,25 +556,13 @@ boolean SX1272::isBW(uint16_t band)
 
 }
 
-/*
- Function: Gets the BW within the module is configured.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-   state = -1 --> Forbidden command for this protocol
-*/
 int8_t  SX1272::getBW()
 {
-    uint8_t state = 2;
+    uint8_t error = 0;
     uint8_t config1;
 
-
-    state = -1;     // BW is not available in FSK mode
-
-
-    // added by C. Pham
-    if (_board==SX1272Chip) {
+    if (_board==SX1272Chip) 
+    {
         // take out bits 7-6 from REG_MODEM_CONFIG1 indicates _bandwidth
         config1 = (readRegister(REG_MODEM_CONFIG1)) >> 6;
     }
@@ -637,28 +573,15 @@ int8_t  SX1272::getBW()
 
     _bandwidth = config1;
 
-    if( (config1 == _bandwidth) && isBW(_bandwidth) )
+    if(! ((config1 == _bandwidth) && isBW(_bandwidth)) )
     {
-        state = 0;
-
+        error = -1;
     }
-    else
-    {
-        state = 1;
 
-    }
-    return state;
+    return error;
 }
 
-/*
- Function: Sets the indicated BW in the module.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
- Parameters:
-   band: bandwith value to set in LoRa modem configuration.
-*/
+
 int8_t  SX1272::setBW(uint16_t band)
 {
     uint8_t st0;
@@ -676,7 +599,7 @@ int8_t  SX1272::setBW(uint16_t band)
     writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);  // LoRa standby mode
     config1 = (readRegister(REG_MODEM_CONFIG1));    // Save config1 to modify only the BW
 
-    // added by C. Pham for SX1276
+    // for SX1276
     if (_board==SX1272Chip) 
     {
         switch(band)
@@ -781,7 +704,7 @@ int8_t  SX1272::getCR()
     int8_t state = 2;
     uint8_t config1;
   
-    // added by C. Pham
+    
     if (_board==SX1272Chip) {
         // take out bits 7-3 from REG_MODEM_CONFIG1 indicates _bandwidth & _codingRate
         config1 = (readRegister(REG_MODEM_CONFIG1)) >> 3;
@@ -828,7 +751,7 @@ int8_t  SX1272::setCR(uint8_t cod)
 
     config1 = readRegister(REG_MODEM_CONFIG1);  // Save config1 to modify only the CR
 
-    // added by C. Pham
+    
     if (_board==SX1272Chip)
     {
         switch(cod)
@@ -970,123 +893,47 @@ uint8_t SX1272::getChannel()
     return state;
 }
 
-/*
- Function: Sets the indicated channel in the module.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-   state = -1 --> Forbidden command for this protocol
- Parameters:
-   ch: frequency channel value to set in configuration.
-*/
+
 int8_t SX1272::setChannel(uint32_t ch)
 {
-    uint8_t st0;
-    int8_t state = 2;
-    unsigned int freq3;
-    unsigned int freq2;
-    uint8_t freq1;
-    uint32_t freq;
-
-    // added by C. Pham
-    _starttime=millis();
-
-    st0 = readRegister(REG_OP_MODE);    // Save the previous status
-    if( _modem == LORA )
-    {
-        // LoRa Stdby mode in order to write in registers
-        writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);
-    }
-    else
-    {
-        // FSK Stdby mode in order to write in registers
-        writeRegister(REG_OP_MODE, FSK_STANDBY_MODE);
-    }
+    int8_t error = 2;
+    uint8_t freq1, freq2, freq3;
+  
+    // LoRa Stdby mode in order to write in registers
+    writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);
 
     freq3 = ((ch >> 16) & 0x0FF);       // frequency channel MSB
     freq2 = ((ch >> 8) & 0x0FF);        // frequency channel MIB
     freq1 = (ch & 0xFF);                // frequency channel LSB
 
-    writeRegister(REG_FRF_MSB, freq3);
-    writeRegister(REG_FRF_MID, freq2);
-    writeRegister(REG_FRF_LSB, freq1);
-
-    // added by C. Pham
-    _stoptime=millis();
-
-    delay_ms(100);
-
-    // storing MSB in freq channel value
-    freq3 = (readRegister(REG_FRF_MSB));
-    freq = (freq3 << 8) & 0xFFFFFF;
-
-    // storing MID in freq channel value
-    freq2 = (readRegister(REG_FRF_MID));
-    freq = (freq << 8) + ((freq2 << 8) & 0xFFFFFF);
-
-    // storing LSB in freq channel value
-    freq = freq + ((readRegister(REG_FRF_LSB)) & 0xFFFFFF);
-
-    if( freq == ch )
+    error = writeReadRegister(REG_FRF_MSB, freq3);
+    if(error != 0)
     {
-        state = 0;
-        _channel = ch;
-
-    }
-    else
-    {
-        state = 1;
+        return -1; 
     }
 
-    if(!isChannel(ch) )
+    error = writeReadRegister(REG_FRF_MID, freq2);
+    if(error != 0)
     {
-        state = -1;
+        return -1; 
     }
 
-    writeRegister(REG_OP_MODE, st0);    // Getting back to previous status
-    delay_ms(100);
-    return state;
+    error = writeReadRegister(REG_FRF_LSB, freq1);
+    if(error != 0)
+    {
+        return -1; 
+    }
+
+    return error;
 }
 
-/*
- Function: Gets the signal power within the module is configured.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
+
 uint8_t SX1272::getPower()
 {
-    uint8_t state = 2;
-    byte value = 0x00;
-
-
-    value = readRegister(REG_PA_CONFIG);
-    state = 1;
-
-    // modified by C. Pham
-    // get only the OutputPower
-    _power = value & B00001111;
-
-    if( (value > -1) & (value < 16) )
-    {
-        state = 0;
-    }
-
-    return state;
+    return readRegister(REG_PA_CONFIG);
 }
 
-/*
- Function: Sets the signal power indicated in the module.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-   state = -1 --> Forbidden command for this protocol
- Parameters:
-   p: power option to set in configuration.
-*/
+
 int8_t SX1272::setPower(char p)
 {
      uint8_t st0;
@@ -1098,11 +945,8 @@ int8_t SX1272::setPower(char p)
 
     st0 = readRegister(REG_OP_MODE);      // Save the previous status
     
-    if( _modem == LORA )
-    { // LoRa Stdby mode to write in registers
-        writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);
-    }
-
+    writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);
+ 
 
     value = _power;
 
@@ -1118,8 +962,7 @@ int8_t SX1272::setPower(char p)
         // disable high power output in all other cases
         writeRegister(RegPaDacReg, 0x84);
     }
-
-    // added by C. Pham
+    
     if (_board==SX1272Chip) {
         writeRegister(REG_PA_CONFIG, value);    // Setting output power value
     }
@@ -1138,45 +981,36 @@ int8_t SX1272::setPower(char p)
 }
 
 
-/*
- Function: Gets the preamble length from the module.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-uint8_t SX1272::getPreambleLength()
+/**
+ * Function: Gets the preamble length from the module.
+ * @return preamble length 
+ */
+uint16_t SX1272::getPreambleLength()
 {
     int8_t state = 0;
+    uint16_t preamblelength = 0;
     uint8_t p_length;
 
-    
     p_length = readRegister(REG_PREAMBLE_MSB_LORA);
     // Saving MSB preamble length in LoRa mode
-    _preamblelength = (p_length << 8) & 0xFFFF;
+    preamblelength = (p_length << 8) & 0xFFFF;
+
     p_length = readRegister(REG_PREAMBLE_LSB_LORA);
     // Saving LSB preamble length in LoRa mode
-    _preamblelength = _preamblelength + (p_length & 0xFFFF);
+    preamblelength += (p_length & 0xFFFF);
 
-    return state;
+    return preamblelength;
 }
 
-/*
- Function: Sets the preamble length in the module
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
- Parameters:
-   l: length value to set as preamble length.
-*/
-uint8_t SX1272::setPreambleLength(uint16_t l)
+/**
+ *  Function: Sets the preamble length in the module
+ * @param  l desired preamble length 
+ * @return   error state
+ */
+int8_t SX1272::setPreambleLength(uint16_t l)
 {
-    uint8_t st0;
+    int8_t error = 0;
     uint8_t p_length;
-    int8_t state = 0;
-
-    st0 = readRegister(REG_OP_MODE);    // Save the previous status
 
     writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);    // Set Standby mode to write in registers
     p_length = ((l >> 8) & 0x0FF);
@@ -1186,277 +1020,137 @@ uint8_t SX1272::setPreambleLength(uint16_t l)
     // Storing LSB preamble length in LoRa mode
     writeRegister(REG_PREAMBLE_LSB_LORA, p_length);
 
-    writeRegister(REG_OP_MODE, st0);    // Getting back to previous status
-    delay_ms(100);
-    return state;
+    return error;
 }
 
-/*
- Function: Gets the payload length from the module.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-uint8_t SX1272::getPayloadLength()
-{
-    uint8_t state = 0;
-
-    // Saving payload length in LoRa mode
-    _payloadlength = readRegister(REG_PAYLOAD_LENGTH_LORA);
-
-    return state;
-}
-
-
-/*
- Function: Gets the node address in the module.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
+/**
+ * Function: returns the stored node address 
+ * @return node address
+ */
 uint8_t SX1272::getNodeAddress()
 {
-    byte st0 = 0;
-    uint8_t state = 2;
-
-    if( _modem == LORA )
-    { // LoRa mode
-        st0 = readRegister(REG_OP_MODE);    // Save the previous status
-        // Allowing access to FSK registers while in LoRa standby mode
-        writeRegister(REG_OP_MODE, LORA_STANDBY_FSK_REGS_MODE);
-    }
-
-    // Saving node address
-    _nodeAddress = readRegister(REG_NODE_ADRS);
-    state = 1;
-
-    if( _modem == LORA )
-    {
-        writeRegister(REG_OP_MODE, st0);        // Getting back to previous status
-    }
-
-    state = 0;
-
-    return state;
+    return _nodeAddress;
 }
 
-/*
- Function: Sets the node address in the module.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-   state = -1 --> Forbidden command for this protocol
- Parameters:
-   addr: address value to set as node address.
-*/
+
 int8_t SX1272::setNodeAddress(uint8_t addr)
 {
     uint8_t st0;
     byte value;
-    uint8_t state = 2;
+    uint8_t error = 0;
 
-    if( addr > 255 )
-    {
-        state = -1;
+    // Saving node address
+    _nodeAddress = addr;
+    st0 = readRegister(REG_OP_MODE);      // Save the previous status
+
+    if( _modem == LORA )
+    { // Allowing access to FSK registers while in LoRa standby mode
+        writeRegister(REG_OP_MODE, LORA_STANDBY_FSK_REGS_MODE);
     }
     else
-    {
-        // Saving node address
-        _nodeAddress = addr;
-        st0 = readRegister(REG_OP_MODE);      // Save the previous status
-
-        if( _modem == LORA )
-        { // Allowing access to FSK registers while in LoRa standby mode
-            writeRegister(REG_OP_MODE, LORA_STANDBY_FSK_REGS_MODE);
-        }
-        else
-        { //Set FSK Standby mode to write in registers
-            writeRegister(REG_OP_MODE, FSK_STANDBY_MODE);
-        }
-
-        // Storing node and broadcast address
-        writeRegister(REG_NODE_ADRS, addr);
-        writeRegister(REG_BROADCAST_ADRS, BROADCAST_0);
-
-        value = readRegister(REG_NODE_ADRS);
-        writeRegister(REG_OP_MODE, st0);        // Getting back to previous status
-
-        if( value == _nodeAddress )
-        {
-            state = 0;
-        }
-        else
-        {
-            state = 1;
-        }
+    { //Set FSK Standby mode to write in registers
+        writeRegister(REG_OP_MODE, FSK_STANDBY_MODE);
     }
-    return state;
+
+    // Storing node and broadcast address
+    writeRegister(REG_NODE_ADRS, addr);
+    writeRegister(REG_BROADCAST_ADRS, BROADCAST_0);
+
+    value = readRegister(REG_NODE_ADRS);
+    writeRegister(REG_OP_MODE, st0);        // Getting back to previous status
+
+    if( value != _nodeAddress )
+    {
+        return -1;
+    }
+
+    return error;
 }
 
-/*
- Function: Gets the SNR value in LoRa mode.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-   state = -1 --> Forbidden command for this protocol
-*/
+
+/**
+ * Function: returns the SNR value 
+ * @return SNR value
+ */
 int8_t SX1272::getSNR()
-{   // getSNR exists only in LoRa mode
-    int8_t state = 2;
-    byte value;
+{   
+    int8_t SNR = readRegister(REG_PKT_SNR_VALUE);
 
-    if( _modem == LORA )
-    { // LoRa mode
-        state = 1;
-        value = readRegister(REG_PKT_SNR_VALUE);
-        if( value & 0x80 ) // The SNR sign bit is 1
-        {
-            // Invert and divide by 4
-            value = ( ( ~value + 1 ) & 0xFF ) >> 2;
-            _SNR = -value;
-        }
-        else
-        {
-            // Divide by 4
-            _SNR = ( value & 0xFF ) >> 2;
-        }
-        state = 0;
+    if( SNR & 0x80 ) // The SNR sign bit is 1
+    {
+        // Invert and divide by 4
+        SNR = ( ( ~SNR + 1 ) & 0xFF ) >> 2;
+        return -SNR;
     }
     else
-    { // forbidden command if FSK mode
-        state = -1;
+    {
+        // Divide by 4
+        return  ( SNR & 0xFF ) >> 2;
     }
-    return state;
+
+    return 0;
 }
 
-/*
- Function: Gets the RSSI of the last packet received in LoRa mode.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-   state = -1 --> Forbidden command for this protocol
-*/
+
+/**
+ * Function: Returns a uint16_t representing the the rssi value of the most recent recieved packet
+ * @return RSSI value 
+ */
 int16_t SX1272::getRSSIpacket()
-{   // RSSIpacket only exists in LoRa
-    int8_t state = 2;
+{  
+    int8_t SNR = 0;
+    int16_t RSSIpacket =0;
+    RSSIpacket = readRegister(REG_PKT_RSSI_VALUE);
+   
+    SNR = getSNR();
 
-    state = 1;
-    if( _modem == LORA )
-    { // LoRa mode
-        state = getSNR();
-        if( state == 0 )
-        {
-            // added by C. Pham
-            _RSSIpacket = readRegister(REG_PKT_RSSI_VALUE);
-
-            if( _SNR < 0 )
-            {
-                // commented by C. Pham
-                //_RSSIpacket = -NOISE_ABSOLUTE_ZERO + 10.0 * SignalBwLog[_bandwidth] + NOISE_FIGURE + ( double )_SNR;
-
-                // added by C. Pham, using Semtech SX1272 rev3 March 2015
-                _RSSIpacket = -(OFFSET_RSSI+(_board==SX1276Chip?20:0)) + (double)_RSSIpacket + (double)_SNR*0.25;
-                state = 0;
-            }
-            else
-            {
-                // commented by C. Pham
-                //_RSSIpacket = readRegister(REG_PKT_RSSI_VALUE);
-                _RSSIpacket = -(OFFSET_RSSI+(_board==SX1276Chip?20:0)) + (double)_RSSIpacket;
-                //end
-                state = 0;
-            }
-        }
+    if( SNR < 0 )
+    {
+        RSSIpacket = -(OFFSET_RSSI+(_board==SX1276Chip?20:0)) + (double)RSSIpacket + (double)SNR*0.25;
     }
     else
-    { // RSSI packet doesn't exist in FSK mode
-        state = -1;
+    {
+        RSSIpacket = -(OFFSET_RSSI+(_board==SX1276Chip?20:0)) + (double)RSSIpacket;
     }
-    return state;
+
+    return RSSIpacket;
 }
 
-
-
-/*
- Function: Limits the current supply of the power amplifier, protecting battery chemistries.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-   state = -1 --> Forbidden parameter value for this function
- Parameters:
-   rate: value to compute the maximum current supply. Maximum current is 45+5*'rate' [mA]
-*/
+/**
+ * Function: sets the maximum current the SX127X device has access 
+ * @param  rate current rate 
+ * @return      error state 0 if no error 
+ */
 int8_t SX1272::setMaxCurrent(uint8_t rate)
 {
-    int8_t state = 2;
+    int8_t error = 0;
     uint8_t st0;
 
     // Maximum rate value = 0x1B, because maximum current supply = 240 mA
     if (rate > 0x1B)
     {
-        state = -1;
-
+        rate = 0x1B; // set the requested rate to 240mA 
     }
-    else
-    {
-        // Enable Over Current Protection
-        rate |= B00100000;
 
-        state = 1;
-        st0 = readRegister(REG_OP_MODE);    // Save the previous status
-        if( _modem == LORA )
-        { // LoRa mode
-            writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);  // Set LoRa Standby mode to write in registers
-        }
-        else
-        { // FSK mode
-            writeRegister(REG_OP_MODE, FSK_STANDBY_MODE);   // Set FSK Standby mode to write in registers
-        }
-        writeRegister(REG_OCP, rate);       // Modifying maximum current supply
-        writeRegister(REG_OP_MODE, st0);        // Getting back to previous status
-        state = 0;
-    }
-    return state;
+    // Enable Over Current Protection
+    rate |= B00100000;
+
+    st0 = readRegister(REG_OP_MODE);    // Save the previous status
+    
+    writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);  // Set LoRa Standby mode to write in registers
+    writeRegister(REG_OCP, rate);       // Modifying maximum current supply
+
+    writeRegister(REG_OP_MODE, st0);        // Getting back to previous status
+
+   
+    return error;
 }
 
 
-/*
- Function: It truncs the payload length if it is greater than 0xFF.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-uint8_t SX1272::truncPayload(uint16_t length16)
-{
-    uint8_t state = 0;
-
-    if( length16 > MAX_PAYLOAD )
-    {
-        _payloadlength = MAX_PAYLOAD;
-    }
-    else
-    {
-        _payloadlength = (length16 & 0xFF);
-    }
-
-    return state;
-}
-
-
-/*
- Function: Configures the module to receive information.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
+/**
+ * Function: Places SX1272 into RX mode 
+ * @return error state 0 if no error 
+ */
 uint8_t SX1272::receive()
 {
     uint8_t state = 1;
@@ -1479,205 +1173,24 @@ uint8_t SX1272::receive()
 
     writeRegister(REG_FIFO_RX_BYTE_ADDR, 0x00); // Setting current value of reception buffer pointer
 
-    state = setPacketLength(MAX_LENGTH);    // With MAX_LENGTH gets all packets with length < MAX_LENGTH
+
+    packet_sent.length =MAX_LENGTH;
+
+    // write out packet length 
+    writeRegister(REG_PAYLOAD_LENGTH_LORA, packet_sent.length);
+
     writeRegister(REG_OP_MODE, LORA_RX_MODE);     // LORA mode - Rx
 
-
     return state;
 }
 
-/*
- Function: Configures the module to receive information.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-uint8_t SX1272::receivePacketMAXTimeout()
-{
-    return receivePacketTimeout(MAX_TIMEOUT);
-}
-
-/*
- Function: Configures the module to receive information.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-uint8_t SX1272::receivePacketTimeout()
-{
-    //setTimeout();
-    return receivePacketTimeout(MAX_TIMEOUT/2);
-}
-
-
-uint8_t SX1272::receivePacketTimeout(uint16_t wait)
-{
-    uint8_t state = 2;
-    uint8_t state_f = 2;
-
- 
-
-    return state_f;
-}
-
-
-/*
- Function: Configures the module to receive all the information on air, before MAX_TIMEOUT expires.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-uint8_t SX1272::receiveAll()
-{
-    return receiveAll(MAX_TIMEOUT);
-}
-
-/*
- Function: Configures the module to receive all the information on air.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-uint8_t SX1272::receiveAll(uint16_t wait)
-{
-    uint8_t state = 2;
-    uint8_t config1;
-
-    state = receive();  // Setting Rx mode
-    if( state == 0 )
-    {
-        state = getPacket(wait);    // Getting all packets received in wait
-    }
-    return state;
-}
-
-/*
- Function: If a packet is received, checks its destination.
- Returns: Boolean that's 'true' if the packet is for the module and
-          it's 'false' if the packet is not for the module.
-*/
-boolean SX1272::availableData()
-{
-    return availableData(MAX_TIMEOUT);
-}
-
-/*
- Function: If a packet is received, checks its destination.
- Returns: Boolean that's 'true' if the packet is for the module and
-          it's 'false' if the packet is not for the module.
- Parameters:
-   wait: time to wait while there is no a valid header received.
-*/
-boolean SX1272::availableData(uint16_t wait)
-{
-    byte value;
-    byte header = 0;
-    boolean forme = false;
-    boolean _hreceived = false;
-    unsigned long previous;
-
-    previous = millis();
-
-    //DI0 is pulled high for 100ms every time a packet is recieved. 
-
-    value = readRegister(REG_IRQ_FLAGS);
-    // Wait to ValidHeader interrupt
-  
-    
-  
-    if( bitRead(value, 4) == 1 )
-    { // header received
-
-        _hreceived = true;
-
-
-         // Waiting to read first payload bytes from packet
-        header = readRegister(REG_FIFO_RX_BYTE_ADDR);
-        // Condition to avoid an overflow (DO NOT REMOVE)
-        if( millis() < previous )
-        {
-            previous = millis();
-        }
-
-
-        if( header != 0 )
-        { // Reading first byte of the received packet
-
-            _destination = readRegister(REG_FIFO);
-        }
-    }
-    else
-    {
-        forme = false;
-        _hreceived = false;
-    }
-
- 
-    // We use _hreceived because we need to ensure that _destination value is correctly
-    // updated and is not the _destination value from the previously packet
-    if( _hreceived == true )
-    { // Checking destination
-        // modified by C. Pham
-        // if _rawFormat, accept all
-        if( (_destination == _nodeAddress) || (_destination == BROADCAST_0) || _rawFormat)
-
-        { // LoRa or FSK mode
-            forme = true;
-
-        }
-        else
-        {
-            forme = false;
-        }
-    }
-
-    return forme;
-}
-
-/*
- Function: It gets and stores a packet if it is received before MAX_TIMEOUT expires.
- Returns:  Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-uint8_t SX1272::getPacketMAXTimeout()
-{
-    return getPacket(MAX_TIMEOUT);
-}
-
-/*
- Function: It gets and stores a packet if it is received.
- Returns:  Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-int8_t SX1272::getPacket()
-{
-    return getPacket(MAX_TIMEOUT);
-}
-
-/*
- Function: It gets and stores a packet if it is received before ending 'wait' time.
- Returns:  Integer that determines if there has been any error
-   // added by C. Pham
-   state = 5  --> The command has been executed with no errors and an ACK is requested
-   state = 3  --> The command has been executed but packet has been incorrectly received
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-   state = -1 --> Forbidden parameter value for this function
- Parameters:
-   wait: time to wait while there is no a valid header received.
-*/
+/**
+ * Function: Should only be called when DIO_0 is asserted, pulls recieved packet from the registers
+ * @return      error state 0 if no error 
+ */
 int8_t SX1272::getPacket(uint16_t wait)
 {
-    uint8_t state = 2;
+    uint8_t error = 0;
     byte value = 0x00;
     unsigned long previous;
     boolean p_received = false;
@@ -1689,7 +1202,6 @@ int8_t SX1272::getPacket(uint16_t wait)
         writeRegister(REG_FIFO_ADDR_PTR, 0x00);     // Setting address pointer in FIFO data buffer
 
         packet_received.dst = readRegister(REG_FIFO);   // Storing first byte of the received packet
-       
         packet_received.type = readRegister(REG_FIFO);      // Reading second byte of the received packet
         packet_received.src = readRegister(REG_FIFO);       // Reading second byte of the received packet
         packet_received.packnum = readRegister(REG_FIFO);   // Reading third byte of the received packet
@@ -1703,20 +1215,15 @@ int8_t SX1272::getPacket(uint16_t wait)
             packet_received.data[i] = readRegister(REG_FIFO); // Storing payload
         }
 
-        state = 0;
-        _payloadlength -= 4;
+        _payloadlength -= OFFSET_PAYLOADLENGTH;
         Serial.write( packet_received.data, _payloadlength);
         writeRegister(REG_FIFO_ADDR_PTR, 0x00);  // Setting address pointer in FIFO data buffer
-
-        clearFlags();   // Initializing flag
-
+        // 
+        clearFlags();   
     }
   
-    return state;
+    return error;
 }
-
-
-
 
 
 int8_t SX1272::checkTransmissionStatus(void)
@@ -1730,11 +1237,9 @@ int8_t SX1272::checkTransmissionStatus(void)
         error = -1;
 
  
-    clearFlags();       // Initializing flags
+    clearFlags();       
     return error;
 }
-
-
 
 int8_t SX1272::sendPacket(uint8_t dest, uint8_t *payload, uint8_t length)
 {
@@ -1777,68 +1282,13 @@ int8_t SX1272::sendPacket(uint8_t dest, uint8_t *payload, uint8_t length)
     writeRegister(REG_OP_MODE, st0);    // Getting back to previous status
    
 
-    // send out    
     writeRegister(REG_OP_MODE, LORA_TX_MODE);  // LORA mode - Tx
 
     return error;
 }
 
 
-/*
- Function: It gets the temperature from the measurement block module.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-uint8_t SX1272::getTemp()
-{
-    uint8_t st0;
-    uint8_t state = 2;
 
-    st0 = readRegister(REG_OP_MODE);    // Save the previous status
-
-    if( _modem == LORA )
-    { // Allowing access to FSK registers while in LoRa standby mode
-        writeRegister(REG_OP_MODE, LORA_STANDBY_FSK_REGS_MODE);
-    }
-
-    state = 1;
-    // Saving temperature value
-    _temp = readRegister(REG_TEMP);
-    if( _temp & 0x80 ) // The SNR sign bit is 1
-    {
-        // Invert and divide by 4
-        _temp = ( ( ~_temp + 1 ) & 0xFF );
-    }
-    else
-    {
-        // Divide by 4
-        _temp = ( _temp & 0xFF );
-    }
-
-
-    if( _modem == LORA )
-    {
-        writeRegister(REG_OP_MODE, st0);    // Getting back to previous status
-    }
-
-    state = 0;
-    return state;
-}
-
-
-
-/*
- Function: Sets the sync word in the module.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-   state = -1 --> Forbidden command for this protocol
- Parameters:
-   cod: sw is sync word value to set in LoRa modem configuration.
-*/
 int8_t  SX1272::setSyncWord(uint8_t sw)
 {
     int8_t error =0; 
@@ -1849,22 +1299,18 @@ int8_t  SX1272::setSyncWord(uint8_t sw)
     writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);      // Set Standby mode to write in registers
 
     error = writeReadRegister(REG_SYNC_WORD, sw);
-    if(error == 0)
+    if(error != 0)
     {
-        _syncWord = sw;
+        return -1; 
     }
 
+    _syncWord = sw;  
     writeRegister(REG_OP_MODE,st0); // Getting back to previous status
     delay_ms(100);
     return error;
 }
 
 
-/**
- * SetsleepMode
- *     responsible for requesting the SX1272 module is set into sleep mode
- * @return error - non zero state for error
- */
 int8_t SX1272::setSleepMode() 
 {
     int8_t error = 0;
@@ -1880,4 +1326,3 @@ int8_t SX1272::setSleepMode()
 
     return error;
 }
-

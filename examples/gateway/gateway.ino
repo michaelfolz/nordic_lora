@@ -125,7 +125,7 @@ const byte interruptPin = 3;
 
 
 void startConfig() {
-
+  uint16_t preamblelength =0;
   int e;
 
   // has customized LoRa settings    
@@ -224,12 +224,12 @@ void startConfig() {
   PRINTLN;
  
   // get preamble length
-  e = sx1272.getPreambleLength();
+  preamblelength = sx1272.getPreambleLength();
   PRINT_CSTSTR("%s","^$Get Preamble Length: state ");
   PRINT_VALUE("%d", e);
   PRINTLN; 
   PRINT_CSTSTR("%s","^$Preamble Length: ");
-  PRINT_VALUE("%d", sx1272._preamblelength);
+  PRINT_VALUE("%d", preamblelength);
   PRINTLN;
   
   // Set the node address and print the result
@@ -330,7 +330,7 @@ void loop(void)
   {
        delay(1000);   
        
-       e=  sx1272.availableData(0);
+       //e=  sx1272.availableData(0);
        PRINT_STR("%s","wait again");
 
       if (rx_packet) 
@@ -344,8 +344,8 @@ void loop(void)
         
        sx1272.receive();
 
- sx1272.getSNR();
-         sx1272.getRSSIpacket();
+
+         int16_t rssi_packet = sx1272.getRSSIpacket();
 
          uint8_t tmp_length=sx1272._payloadlength;
          
@@ -356,7 +356,7 @@ void loop(void)
                    sx1272.packet_received.packnum,
                    tmp_length, 
                    sx1272._SNR,
-                   sx1272._RSSIpacket,
+                   rssi_packet,
                    (sx1272._bandwidth==BW_125)?125:((sx1272._bandwidth==BW_250)?250:500),
                    sx1272._codingRate+4,
                    sx1272._spreadingFactor);
@@ -372,7 +372,7 @@ void loop(void)
                    sx1272.packet_received.packnum, 
                    tmp_length,
                    sx1272._SNR,
-                   sx1272._RSSIpacket);
+                   rssi_packet);
                    
          PRINT_STR("%s",sprintf_buf);          
 
@@ -438,7 +438,7 @@ uint8_t delay_ms(uint16_t delayms)
 void blink() {
   uint8_t e =0;
   Serial.println("rx packet."); 
-  e=sx1272.getPacket();
+  e=sx1272.getPacket(MAX_TIMEOUT);
   if(!e)
          rx_packet = 1; 
           
