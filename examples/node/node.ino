@@ -157,38 +157,9 @@ void loop(void)
 
   tx_state = TX_COMPLETE; 
 
-  delay(100);
+  delay(1000);
   if (tx_state == TX_COMPLETE) 
   {
-      int value = analogRead(TEMP_PIN_READ);
-
-      // change here how the temperature should be computed depending on your sensor type
-      //  
-      temp = value*TEMP_SCALE/1024.0;
-    
-      Serial.print(F("Reading "));
-      Serial.println(value);
-      
-      //temp = temp - 0.5;
-      temp = temp / 10.0;
-
-      Serial.print(F("(Temp is "));
-      Serial.println(temp);
-
-      uint8_t r_size;
-
-      r_size=sprintf((char*)message+app_key_offset, "\\!#%d#%d", field_index, (int)temp);  
-
-      Serial.print(F("Sending "));
-      Serial.println((char*)(message+app_key_offset));
-
-      Serial.print(F("Real payload size is "));
-      Serial.println(r_size);
-      
-      int pl=r_size+app_key_offset;
-  
-
-      startSend=millis();
 
       // indicate that we have an appkey
       sx1272.setPacketType(PKT_TYPE_DATA | PKT_FLAG_DATA_WAPPKEY);
@@ -196,25 +167,14 @@ void loop(void)
  
       // Send message to the gateway and print the result
       // with the app key if this feature is enabled
-      e = sx1272.sendPacketTimeout(DEFAULT_DEST_ADDR, message, pl);
+      e = sx1272.sendPacket(DEFAULT_DEST_ADDR, message, 4);
      
       endSend=millis();
   
-      Serial.print(F("LoRa pkt seq "));
-      Serial.println(sx1272.packet_sent.packnum);
-    
-      Serial.print(F("LoRa Sent in "));
-      Serial.println(endSend-startSend);
-          
-      Serial.print(F("LoRa Sent w/CAD in "));
-
-      Serial.println(endSend-sx1272._startDoCad);
-
       Serial.print(F("Packet sent, state "));
-      Serial.println(e);
+
   
-      lastTransmissionTime=millis();
-      delayBeforeTransmit=1000+random(15,60)*100;
+
   }
 
 }

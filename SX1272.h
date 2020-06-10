@@ -1049,6 +1049,7 @@ public:
      */
     uint8_t setPayload(uint8_t *payload);
 
+
     //! If an ACK is received, it gets it and checks its content.
     /*!
      *
@@ -1135,6 +1136,8 @@ public:
     int8_t setSleepMode();
 
     int8_t writeReadRegister(byte address, byte data);
+    int8_t sendPacket(uint8_t dest, uint8_t *payload, uint8_t length); 
+    int8_t setPacket(uint8_t dest, uint8_t *payload, uint8_t length);
 
     // SX1272 or SX1276?
     uint8_t _board;

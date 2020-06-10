@@ -1214,6 +1214,8 @@ int8_t SX1272::setPacketLength()
     return setPacketLength(length);
 }
 
+
+
 /*
  Function: Sets the packet length in the module.
  Returns: Integer that determines if there has been any error
@@ -1738,7 +1740,6 @@ int8_t SX1272::getPacket(uint16_t wait)
     uint8_t error = 0;
     uint8_t data = 0x00;
 
-
     // verify received (RxDone flag) has been set and the valid header flag has been set
     data = readRegister(REG_IRQ_FLAGS);
     if((data & REG_IRQ_RXDONE_FLAG) && (data & REG_IRQ_VALID_HEADER_FLAG ))
@@ -1752,14 +1753,18 @@ int8_t SX1272::getPacket(uint16_t wait)
         packet_received.packnum = readRegister(REG_FIFO);   // Reading third byte of the received packet
         packet_received.length = readRegister(REG_RX_NB_BYTES);
 
-        _payloadlength=packet_received.length;
+       // _payloadlength=packet_received.length;
        
-        for(uint8_t i = 0; i < _payloadlength; i++)
+        for(uint8_t i = 0; i < packet_received.length; i++)
         {
             packet_received.data[i] = readRegister(REG_FIFO); // Storing payload
         }
    
+        Serial.write(packet_received.data,  packet_received.length);
         writeRegister(REG_FIFO_ADDR_PTR, 0x00);  // Setting address pointer in FIFO data buffer  
+
+       Serial.print(F("SENT"));
+         Serial.println(packet_received.length );
     }
   
     // regardless of whether a packet is recieved or not, we should clear the flags
@@ -1768,139 +1773,56 @@ int8_t SX1272::getPacket(uint16_t wait)
     return error;
 }
 
-/*
- Function: It sets the packet destination.
- Returns:  Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
- Parameters:
-   dest: destination value of the packet sent.
-*/
-int8_t SX1272::setDestination(uint8_t dest)
+
+
+int8_t SX1272::sendPacket(uint8_t dest, uint8_t *payload, uint8_t length)
 {
-    int8_t state = 0;
+    static uint16_t counter=0;
+    int8_t error = 0;
+    uint8_t st0 =0; 
+    uint8_t data[10];
+  
 
-    _destination = dest; // Storing destination in a global variable
-    packet_sent.dst = dest;  // Setting destination in packet structure
-    packet_sent.src = _nodeAddress; // Setting source in packet structure
-    packet_sent.packnum = _packetNumber;    // Setting packet number in packet structure
-    _packetNumber++;
-
-    return state;
-}
-
-/*
- Function: It sets an uint8_t array payload packet in a packet struct.
- Returns:  Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-uint8_t SX1272::setPayload(uint8_t *payload)
-{
-    uint8_t state = 0;
- 
-    for(unsigned int i = 0; i < _payloadlength; i++)
-    {
-        packet_sent.data[i] = payload[i];   // Storing payload in packet structure
-    }
-    // set length with the actual counter value
-    state = setPacketLength();  // Setting packet length in packet structure
-    return state;
-}
-
-/*
- Function: It sets a packet struct in FIFO in order to sent it.
- Returns:  Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-uint8_t SX1272::setPacket(uint8_t dest, uint8_t *payload)
-{
-    int8_t state = 2;
-    uint8_t st0;
-
+    sprintf((char*)data, "%04d", counter++);  
 
     st0 = readRegister(REG_OP_MODE);    // Save the previous status
-    clearFlags();   // Initializing flags
+    clearFlags();   // clear flags before packet is set 
 
-    writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);  // Stdby LoRa mode to write in FIFO
-  
-    // Sending new packet
-    state = setDestination(dest);   // Setting destination in packet structure
-    
-    state = setPayload(payload);
-
+    writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);  // Stdby LoRa mode to write in FIFO 
+ 
+    _packetNumber++;
+ 
+    packet_sent.length = (4 + OFFSET_PAYLOADLENGTH);
+    _payloadlength = 4;
+    writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);    // Set LoRa Standby mode to write in registers
+    writeRegister(REG_PAYLOAD_LENGTH_LORA, _payloadlength);
+   
     // set the type to be a data packet
     packet_sent.type |= PKT_TYPE_DATA;
 
     writeRegister(REG_FIFO_ADDR_PTR, 0x80);  // Setting address pointer in FIFO data buffer
 
-    state = 1;
     // Writing packet to send in FIFO
-
-    writeRegister(REG_FIFO, packet_sent.dst);       // Writing the destination in FIFO
- 
+    writeRegister(REG_FIFO, dest);       // Writing the destination in FIFO
     writeRegister(REG_FIFO, packet_sent.type);      // Writing the packet type in FIFO
-    writeRegister(REG_FIFO, packet_sent.src);       // Writing the source in FIFO
-    writeRegister(REG_FIFO, packet_sent.packnum);   // Writing the packet number in FIFO
-    writeRegister(REG_FIFO, packet_sent.length);  // Writing the packet length in FIFO
-    
+    writeRegister(REG_FIFO, _nodeAddress);       // Writing the source in FIFO
+    writeRegister(REG_FIFO, _packetNumber);   // Writing the packet number in FIFO
+   // writeRegister(REG_FIFO, packet_sent.length);  // Writing the packet length in FIFO
+   
+
     for(unsigned int i = 0; i < _payloadlength; i++)
     {
-        writeRegister(REG_FIFO, packet_sent.data[i]);  // Writing the payload in FIFO
+        writeRegister(REG_FIFO, data[i]);  // Writing the payload in FIFO
     }
-    state = 0;
-
-
+          
     writeRegister(REG_OP_MODE, st0);    // Getting back to previous status
-    return state;
-}
-
-/*
- Function: Configures the module to transmit information.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-uint8_t SX1272::sendWithTimeout(uint16_t wait)
-{
-    uint8_t state = 2;
-    byte value = 0x00;
-
-    clearFlags();   // Initializing flags
+    
+    clearFlags();   // clear flags after packet is set 
 
     writeRegister(REG_OP_MODE, LORA_TX_MODE);  // LORA mode - Tx
 
-
-    return state;
-}
-
-
-
-/*
- Function: Configures the module to transmit information.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-uint8_t SX1272::sendPacketTimeout(uint8_t dest, uint8_t *payload, uint16_t length16)
-{
-    uint8_t error = 0;
-
-     Serial.print("B1");
-   // error = truncPayload(length16);
-
- Serial.print("B2");
-    error = setPacket(dest, payload); // Setting a packet with 'dest' destination
-                                          // and writing it in FIFO.
-    
- Serial.print("B3");
-    error = sendWithTimeout();    // Sending the packet
+      Serial.print(F("RLS"));
+         Serial.write(data, 4);
 
     return error;
 }
