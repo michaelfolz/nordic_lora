@@ -1135,6 +1135,8 @@ public:
     int8_t setSleepMode();
 
     int8_t writeReadRegister(byte address, byte data);
+    int8_t checkTransmissionStatus(void);
+    int8_t sendPacket(uint8_t dest, uint8_t *payload, uint8_t length);
 
     // SX1272 or SX1276?
     uint8_t _board;

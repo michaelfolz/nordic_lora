@@ -177,8 +177,8 @@ void loop(void)
   {
 
       uint8_t r_size;
-
-      r_size=sprintf((char*)message, "%s","thisisamessage");  
+      static uint16_t counter =0;
+      r_size=sprintf((char*)message, "%04d this packet 0x%x",counter, counter++);  
 
       Serial.print(F("Sending "));
       Serial.println((char*)(message+app_key_offset));
@@ -192,20 +192,28 @@ void loop(void)
       
       // Send message to the gateway and print the result
       // with the app key if this feature is enabled
-      e = sx1272.sendPacketTimeout(DEFAULT_DEST_ADDR, message, pl);
+      e = sx1272.sendPacket(DEFAULT_DEST_ADDR, message, r_size);
+      if(e != 0)
+        tx_state = TX_ERROR;
 
   }
 
-     if(tx_state == TX_COMPLETE)
+    if(tx_state == TX_COMPLETE)
     {
           Serial.print(F("DONE "));
+         tx_state = TX_NONE; 
+    }
+
+    if(tx_state == TX_ERROR)
+    {
+          Serial.print(F("ERROR "));
          tx_state = TX_NONE; 
     }
 
 }
    
 void blink() {
-  uint8_t e =0;
+  uint8_t error =0;
   Serial.println("tx packet."); 
 Serial.print(tx_state);
   switch(tx_state)
@@ -218,10 +226,21 @@ Serial.print(tx_state);
       break;
       
     case TX_IN_TRANSMISSION: 
-       sx1272.sendWithTimeout(10); 
-      tx_state = TX_COMPLETE;
-       Serial.print("A");
+    {
+      error = sx1272.checkTransmissionStatus(); 
+      if(error ==0)
+      {
+        tx_state = TX_COMPLETE;
+      }
+      else 
+      {
+        tx_state = TX_ERROR;
+      
+      }
+
       break;
+    }
+ 
       
   }
           
