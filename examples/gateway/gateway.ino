@@ -310,7 +310,7 @@ void setup()
   
   
   pinMode(interruptPin, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(interruptPin), blink, RISING);
+  attachInterrupt(digitalPinToInterrupt(interruptPin), blink, CHANGE);
   
   delay(1000);
 
@@ -325,13 +325,13 @@ void loop(void)
   receivedFromLoRa=false;
 
   sx1272.receive();
-   e=  sx1272.availableData(0);
+      
   while (radioON) 
   {
-       delay(100);   
+       delay(1000);   
        
-      // e=  sx1272.availableData(0);
-      // PRINT_STR("%s","wait again");
+       e=  sx1272.availableData(0);
+       PRINT_STR("%s","wait again");
 
       if (rx_packet) 
       {
@@ -341,8 +341,51 @@ void loop(void)
           
         rx_packet = 0;
       
-        sx1272.availableData(0); 
+        
        sx1272.receive();
+
+ sx1272.getSNR();
+         sx1272.getRSSIpacket();
+
+         uint8_t tmp_length=sx1272._payloadlength;
+         
+         sprintf(sprintf_buf,"--- rxlora. dst=%d type=0x%.2X src=%d seq=%d len=%d SNR=%d RSSIpkt=%d BW=%d CR=4/%d SF=%d\n", 
+                   sx1272.packet_received.dst,
+                   sx1272.packet_received.type, 
+                   sx1272.packet_received.src,
+                   sx1272.packet_received.packnum,
+                   tmp_length, 
+                   sx1272._SNR,
+                   sx1272._RSSIpacket,
+                   (sx1272._bandwidth==BW_125)?125:((sx1272._bandwidth==BW_250)?250:500),
+                   sx1272._codingRate+4,
+                   sx1272._spreadingFactor);
+                   
+         PRINT_STR("%s",sprintf_buf);
+
+         // provide a short output for external program to have information about the received packet
+         // ^psrc_id,seq,len,SNR,RSSI
+         sprintf(sprintf_buf,"^p%d,%d,%d,%d,%d,%d,%d\n",
+                   sx1272.packet_received.dst,
+                   sx1272.packet_received.type,                   
+                   sx1272.packet_received.src,
+                   sx1272.packet_received.packnum, 
+                   tmp_length,
+                   sx1272._SNR,
+                   sx1272._RSSIpacket);
+                   
+         PRINT_STR("%s",sprintf_buf);          
+
+         // ^rbw,cr,sf
+         sprintf(sprintf_buf,"^r%d,%d,%d\n", 
+                   (sx1272._bandwidth==BW_125)?125:((sx1272._bandwidth==BW_250)?250:500),
+                   sx1272._codingRate+4,
+                   sx1272._spreadingFactor);
+                   
+         PRINT_STR("%s",sprintf_buf);  
+
+    
+       
       }  
   }  
 } 

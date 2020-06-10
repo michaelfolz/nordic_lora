@@ -64,9 +64,10 @@ uint16_t w_timer=1000;
 
 int loraMode=LORAMODE;
 
-uint8_t my_appKey[4]={5, 6, 7, 8};
 
 const byte interruptPin = 2;
+
+ 
 
  
 typedef enum {
@@ -74,11 +75,14 @@ typedef enum {
     TX_COMPLETE                                  = 1,
     TX_IN_TRANSMISSION                           = 2,
     TX_ERROR                                     = 3,
+    TX_REQUEST_SEND                              = 4,
+    TX_SETTING_UP_TRANSMISSION                   = 5, 
 } SX127X_TX_Packet_States;
 
 
 
 volatile SX127X_TX_Packet_States tx_state =TX_NONE; 
+uint8_t my_appKey[4]={5, 6, 7, 8};
 
 void setup()
 {
@@ -138,10 +142,13 @@ void setup()
   
   // Print a success message
   Serial.println(F("SX1272 successfully configured"));
- 
+
+
   pinMode(interruptPin, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(interruptPin), blink, FALLING);
   
+
+    tx_state = TX_NONE; 
 
   delay(500);
 }
@@ -155,48 +162,71 @@ void loop(void)
   uint8_t app_key_offset=0;
   int e;
 
-  tx_state = TX_COMPLETE; 
+  // wait to send out next packet 
+  if (millis()-lastTransmissionTime > delayBeforeTransmit)
+  {
+      startSend=millis();
+        endSend=millis();  
+      lastTransmissionTime=millis();
+      delayBeforeTransmit=1000+random(15,60)*100;
+     tx_state = TX_REQUEST_SEND; 
+  }
 
-  delay(1000);
-  if (tx_state == TX_COMPLETE) 
+    
+  if (tx_state == TX_REQUEST_SEND)
   {
 
-      // indicate that we have an appkey
-      sx1272.setPacketType(PKT_TYPE_DATA | PKT_FLAG_DATA_WAPPKEY);
+      uint8_t r_size;
 
- 
+      r_size=sprintf((char*)message, "%s","thisisamessage");  
+
+      Serial.print(F("Sending "));
+      Serial.println((char*)(message+app_key_offset));
+
+      Serial.print(F("Real payload size is "));
+      Serial.println(r_size);
+      
+      int pl=r_size+app_key_offset;
+  
+      tx_state =  TX_SETTING_UP_TRANSMISSION;
+      
       // Send message to the gateway and print the result
       // with the app key if this feature is enabled
-      e = sx1272.sendPacket(DEFAULT_DEST_ADDR, message, 4);
-     
-      endSend=millis();
-  
-      Serial.print(F("Packet sent, state "));
-
-  
+      e = sx1272.sendPacketTimeout(DEFAULT_DEST_ADDR, message, pl);
 
   }
 
-}
+     if(tx_state == TX_COMPLETE)
+    {
+          Serial.print(F("DONE "));
+         tx_state = TX_NONE; 
+    }
 
+}
    
 void blink() {
   uint8_t e =0;
-  Serial.println("rx packet."); 
-
+  Serial.println("tx packet."); 
+Serial.print(tx_state);
   switch(tx_state)
   {
+    case TX_NONE: 
     case TX_COMPLETE: 
+    case TX_SETTING_UP_TRANSMISSION:
       tx_state = TX_IN_TRANSMISSION;
+      Serial.print("T");
       break;
       
     case TX_IN_TRANSMISSION: 
+       sx1272.sendWithTimeout(10); 
       tx_state = TX_COMPLETE;
+       Serial.print("A");
       break;
       
   }
           
 }
+
 
 /**
  * @brief      called by cdc_usbd libraries, will be called every time a packet is received on the cdc lines 
