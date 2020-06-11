@@ -43,7 +43,7 @@ void setup()
 {
     int error;
 
-      // MSB, mode 0, 2Mhz 
+    // MSB, mode 0, 2Mhz 
     SPI.begin();
     SPI.setBitOrder(MSBFIRST);
     SPI.setClockDivider(SPI_CLOCK_DIV8);

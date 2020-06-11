@@ -52,7 +52,7 @@ void loop(void)
     int error = 0;
     uint8_t tmp_length;
     int16_t rssi_packet = 0;
-
+    int8_t SNR; 
     sx1272.receive();
   
     while (1) 
@@ -65,9 +65,9 @@ void loop(void)
 
             // pull packet from FIFO
             sx1272.receive();
-
+           
             rssi_packet = sx1272.getRSSIpacket();
-
+            SNR = sx1272.getSNR();
             tmp_length = sx1272._payloadlength;
 
             sprintf(sprintf_buf,"\n --- rxlora. dst=%d type=0x%.2X src=%d seq=%d len=%d SNR=%d RSSIpkt=%d\n", 
@@ -76,11 +76,9 @@ void loop(void)
                    sx1272._packet_received.src,
                    sx1272._packet_received.packnum,
                    tmp_length, 
-                   sx1272._SNR,
+                   SNR,
                    rssi_packet);
-                   
             Serial.print(sprintf_buf);
-
         }  
     }  
 } 

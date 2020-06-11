@@ -1,10 +1,7 @@
 
 #include "SX1272.h"
-
-SX1272_LoRA_Settings LoRA_Default = 
-{
-    'x', CH_10_868 , 4, 0x12, 0x1B
-};
+                                    // power, chan, mode, cw, current
+SX1272_LoRA_Settings LoRA_Default = { SX1272_POWER_MAXIMUM, CH_10_868 , 4, 0x12, 0x1B};
 
 
 const uint8_t SX127X_SpreadFactor[SX127X_MODES] =
@@ -88,14 +85,8 @@ SX1272::SX1272()
 };
 
 
-
-
 #define SX127X_ERROR_CHIP_UNSUPPORTED           0x10
 #define SX127X_ERROR_UNABLE_TO_SET_LORA_STATE   0x11
-#define SX127X_ERROR
-#define SX127X_ERROR
-#define SX127X_ERROR
-#define SX127X_ERROR
 
 /*
  Function: Sets the module ON.
@@ -109,15 +100,15 @@ uint8_t SX1272::ON()
     // Powering the module
     gpio_mode(SX1272_SS,OUTPUT);
     gpio_write(SX1272_SS,HIGH);
-    delay_ms(100);
+    delay_ms(10);
     
     gpio_mode(SX1272_RST,OUTPUT);
 
     // request device reset 
     gpio_write(SX1272_RST,HIGH);
-    delay_ms(100);
+    delay_ms(10);
     gpio_write(SX1272_RST,LOW);
-    delay_ms(100);
+    delay_ms(10);
 
     // Read Version 
     version = readRegister(REG_VERSION);
@@ -194,9 +185,6 @@ uint8_t SX1272::ON()
     return error;
 }
 
-
-
-
 /*
  Function: Sets the module OFF.
  Returns: Nothing
@@ -258,7 +246,7 @@ int8_t SX1272::writeReadRegister(byte address, byte data)
     byte dataRead = 0;
     writeRegister(address, data);
 
-    delay(100);
+    delay(10);
 
     dataRead = readRegister(address);
 
@@ -351,24 +339,25 @@ int8_t SX1272::setMode(uint8_t mode)
     error = setCR(CR_5);    
     if(error != 0)
     {
-
+        return error;
     }
 
     // set the spreading factor
     error = setSF(spreadingFactor);      
     if(error != 0)
     {
-        
+        return error;
     }
 
     // Set the bandwidth 
     error = setBW(bandwidth);      
     if(error != 0)
     {
-        
+        return error;
     }
+
     writeRegister(REG_OP_MODE, st0);    // Getting back to previous status
-    delay_ms(100);
+    delay_ms(10);
     return error;
 }
 
@@ -384,18 +373,17 @@ boolean SX1272::isSF(uint8_t spr)
     // Checking available values for _spreadingFactor
     switch(spr)
     {
-    case SF_6:
-    case SF_7:
-    case SF_8:
-    case SF_9:
-    case SF_10:
-    case SF_11:
-    case SF_12:
-        return true;
-        break;
+        case SF_7:
+        case SF_8:
+        case SF_9:
+        case SF_10:
+        case SF_11:
+        case SF_12:
+            return true;
+            break;
 
-    default:
-        return false;
+        default:
+            return false;
     }
     
     return false; 
@@ -410,11 +398,9 @@ int8_t  SX1272::getSF()
     int8_t error = 0;
     uint8_t config2;
 
-  
     // take out bits 7-4 from REG_MODEM_CONFIG2 indicates _spreadingFactor
     config2 = (readRegister(REG_MODEM_CONFIG2)) >> 4;
     _spreadingFactor = config2;
-
 
     if(!isSF(_spreadingFactor) )
     {
@@ -441,25 +427,10 @@ int8_t SX1272::setSF(uint8_t spr)
     st0 = readRegister(REG_OP_MODE);    // Save the previous status
     writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);  // LoRa standby mode
 
-
     config2 = (readRegister(REG_MODEM_CONFIG2));    // Save config2 to modify SF value (bits 7-4)
 
     switch(spr)
     {
-        case SF_6: 
-        {
-            config2 = config2 & B01101111;  // clears bits 7 & 4 from REG_MODEM_CONFIG2
-            config2 = config2 | B01100000;  // sets bits 6 & 5 from REG_MODEM_CONFIG2
-            // Mandatory headerOFF with SF = 6 (Implicit mode)
-
-            // Set the bit field DetectionOptimize of
-            // register RegLoRaDetectOptimize to value "0b101".
-            writeRegister(REG_DETECT_OPTIMIZE, 0x05);
-
-            // Write 0x0C in the register RegDetectionThreshold.
-            writeRegister(REG_DETECTION_THRESHOLD, 0x0C);
-            break;
-        }
         case SF_7:  
         {   
             config2 = config2 & B01111111;  // clears bits 7 from REG_MODEM_CONFIG2
@@ -495,15 +466,12 @@ int8_t SX1272::setSF(uint8_t spr)
         }
     }
 
-    // Check if it is neccesary to set special settings for SF=6
-    if( spr != SF_6 )
-    {
-        // LoRa detection Optimize: 0x03 --> SF7 to SF12
-        writeRegister(REG_DETECT_OPTIMIZE, 0x03);
+  
+    // LoRa detection Optimize: 0x03 --> SF7 to SF12
+    writeRegister(REG_DETECT_OPTIMIZE, 0x03);
 
-        // LoRa detection threshold: 0x0A --> SF7 to SF12
-        writeRegister(REG_DETECTION_THRESHOLD, 0x0A);
-    }
+    // LoRa detection threshold: 0x0A --> SF7 to SF12
+    writeRegister(REG_DETECTION_THRESHOLD, 0x0A);
 
     
     if (_board==SX1272Chip) 
@@ -520,11 +488,10 @@ int8_t SX1272::setSF(uint8_t spr)
 
     // here we write the new SF
     writeRegister(REG_MODEM_CONFIG2, config2);      // Update config2
-
-    delay_ms(100);
+    delay_ms(10);
 
     writeRegister(REG_OP_MODE, st0);    // Getting back to previous status
-    delay_ms(100);
+    delay_ms(10);
 
     // check if valid 
     if(!isSF(spr) )
@@ -886,7 +853,6 @@ int8_t SX1272::setPower(char p)
     int8_t error = 0;
     byte value = 0x00;
 
-    p = SX1272_POWER_MAXIMUM; 
     byte RegPaDacReg = (_board==SX1272Chip)?0x5A:0x4D;
 
     st0 = readRegister(REG_OP_MODE);      // Save the previous status
@@ -902,7 +868,6 @@ int8_t SX1272::setPower(char p)
         value = value | B10000000;
         // and then set the high output power config with register REG_PA_DAC
         writeRegister(RegPaDacReg, 0x87);
-        // TODO: Have to set RegOcp for OcpOn and OcpTrim
     }
     else {
         // disable high power output in all other cases
@@ -1017,16 +982,14 @@ int8_t SX1272::setNodeAddress(uint8_t addr)
     return error;
 }
 
-
 /**
  * Function: returns the SNR value 
  * @return SNR value
  */
 int8_t SX1272::getSNR()
 {   
-    return  readRegister(REG_PKT_SNR_VALUE);
+    return  readRegister(REG_PKT_SNR_VALUE) >> 2;
 }
-
 
 /**
  * Function: Returns a uint16_t representing the the rssi value of the most recent recieved packet
@@ -1077,7 +1040,6 @@ int8_t SX1272::setMaxCurrent(uint8_t rate)
     writeRegister(REG_OCP, rate);       // Modifying maximum current supply
 
     writeRegister(REG_OP_MODE, st0);        // Getting back to previous status
-
    
     return error;
 }
@@ -1088,7 +1050,7 @@ int8_t SX1272::setMaxCurrent(uint8_t rate)
  */
 uint8_t SX1272::receive()
 {
-    uint8_t state = 1;
+    uint8_t error = 0;
 
     // Initializing _packet_received struct
     memset( &_packet_received, 0x00, sizeof(_packet_received) );
@@ -1098,25 +1060,22 @@ uint8_t SX1272::receive()
     writeRegister(REG_LNA, LNA_MAX_GAIN);
     writeRegister(REG_FIFO_ADDR_PTR, 0x00);  // Setting address pointer in FIFO data buffer
 
-
     if (_spreadingFactor == SF_10 || _spreadingFactor == SF_11 || _spreadingFactor == SF_12) {
         writeRegister(REG_SYMB_TIMEOUT_LSB,0x05);
     } else {
         writeRegister(REG_SYMB_TIMEOUT_LSB,0x08);
     }
-    //end
 
     writeRegister(REG_FIFO_RX_BYTE_ADDR, 0x00); // Setting current value of reception buffer pointer
 
-
     _packet_sent.length =MAX_LENGTH;
 
-    // write out packet length 
+    //set packet length 
     writeRegister(REG_PAYLOAD_LENGTH_LORA, _packet_sent.length);
+    // Place LORA mode - Rx
+    writeRegister(REG_OP_MODE, LORA_RX_MODE);     
 
-    writeRegister(REG_OP_MODE, LORA_RX_MODE);     // LORA mode - Rx
-
-    return state;
+    return error;
 }
 
 /**
@@ -1127,11 +1086,9 @@ int8_t SX1272::getPacket(void)
 {
     uint8_t error = 0;
     byte value = 0x00;
-    unsigned long previous;
-    boolean p_received = false;
 
     value = readRegister(REG_IRQ_FLAGS);
-    if(value && REG_IRQ_RXDONE_FLAG) // &&  (!(value, REG_IRQ_VALID_HEADER_FLAG) == 0) )
+    if((value && REG_IRQ_RXDONE_FLAG)  && (value, REG_IRQ_VALID_HEADER_FLAG))
     {
         writeRegister(REG_FIFO_ADDR_PTR, 0x00);     // Setting address pointer in FIFO data buffer
 
@@ -1139,18 +1096,15 @@ int8_t SX1272::getPacket(void)
         _packet_received.type = readRegister(REG_FIFO);      // Reading second byte of the received packet
         _packet_received.src = readRegister(REG_FIFO);       // Reading second byte of the received packet
         _packet_received.packnum = readRegister(REG_FIFO);   // Reading third byte of the received packet
-
         _packet_received.length = readRegister(REG_RX_NB_BYTES);
-
-        _payloadlength=_packet_received.length;
        
-        for(unsigned int i = 0; i < _payloadlength; i++)
+        for(unsigned int i = 0; i < _packet_received.length; i++)
         {
             _packet_received.data[i] = readRegister(REG_FIFO); // Storing payload
         }
 
-        _payloadlength -= OFFSET_PAYLOADLENGTH;
-        Serial.write( _packet_received.data, _payloadlength);
+        _packet_received.length -= OFFSET_PAYLOADLENGTH;
+        Serial.write( _packet_received.data, _packet_received.length);
         writeRegister(REG_FIFO_ADDR_PTR, 0x00);  // Setting address pointer in FIFO data buffer
         // clear the flags, this pulls DIO_0 low 
         clearFlags();   
@@ -1174,8 +1128,8 @@ int8_t SX1272::checkTransmissionStatus(void)
     if(!(value && REG_IRQ_TX_DONE_FLAG)) 
         error = -1;
 
- 
-    clearFlags();       
+    clearFlags();
+
     return error;
 }
 
@@ -1191,21 +1145,21 @@ int8_t SX1272::sendPacket(uint8_t dest, uint8_t *payload, uint8_t length)
     uint8_t error = 0;
     uint8_t st0;
     
+    // limit the length to maximum payload
     if(length > MAX_PAYLOAD)
+    {
         length = MAX_PAYLOAD; 
-
-    _payloadlength = length;
+    }
 
     st0 = readRegister(REG_OP_MODE);    // Save the previous status
     clearFlags();   // clear the flags 
 
     writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);  // set lora module into standby mode
-  
     // Sending new packet
     _packet_sent.dst = dest;  // Setting destination in packet structure
     _packet_sent.src = _nodeAddress; // Setting source in packet structure
     _packet_sent.packnum = _packetNumber;    // Setting packet number in packet structure
-    _packet_sent.length = _payloadlength + OFFSET_PAYLOADLENGTH;
+    _packet_sent.length = length + OFFSET_PAYLOADLENGTH;
 
     // write out packet length 
     writeRegister(REG_PAYLOAD_LENGTH_LORA, _packet_sent.length);
@@ -1221,15 +1175,16 @@ int8_t SX1272::sendPacket(uint8_t dest, uint8_t *payload, uint8_t length)
     writeRegister(REG_FIFO, _packet_sent.src);       // Writing the source in FIFO
     writeRegister(REG_FIFO, _packet_sent.packnum);   // Writing the packet number in FIFO
    
-    for(unsigned int i = 0; i < _payloadlength; i++)
+    for(unsigned int i = 0; i < length; i++)
     {
-        writeRegister(REG_FIFO, payload[i]);  // Writing the payload in FIFO
+        // Writing the payload in FIFO
+        writeRegister(REG_FIFO, payload[i]); 
     }
 
-    writeRegister(REG_OP_MODE, st0);    // Getting back to previous status
-   
-
-    writeRegister(REG_OP_MODE, LORA_TX_MODE);  // LORA mode - Tx
+    // Getting back to previous status
+    writeRegister(REG_OP_MODE, st0);
+    // Setup LORA mode - Tx
+    writeRegister(REG_OP_MODE, LORA_TX_MODE);
 
     return error;
 }

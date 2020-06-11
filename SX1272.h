@@ -202,7 +202,7 @@
 #define CR_8                                        0x04
 
 //LORA SPREADING FACTOR:
-#define SF_6                                        0x06
+#define SF_6                                        0x06  // not supported - header isnt supported 
 #define SF_7                                        0x07
 #define SF_8                                        0x08
 #define SF_9                                        0x09
@@ -416,8 +416,91 @@ public:
      */
     int8_t setSleepMode(); 
 
+private:
 
-/// MAKE PRIVATE !!!! 
+    /*
+     Function: Reads the indicated register.
+     Returns: The content of the register
+     Parameters:
+       address: address register to read from
+    */
+    byte readRegister(byte address);
+
+    /*
+     Function: Writes on the indicated register.
+     Returns: Nothing
+     Parameters:
+       address: address register to write in
+       data : value to write in the register
+    */
+    void writeRegister(byte address, byte data);
+
+    /**
+     * Function: writes & read to the indicated register return 0 if equal
+     * @param  address  address
+     * @param  data     byte to write
+     * @return          0 if equal
+     */
+    int8_t writeReadRegister(byte address, byte data);
+
+    /**
+     * Function: Clears the interruption flags
+     * @return Nothing
+     */
+    int8_t clearFlags();
+
+
+    /**
+     * Function: requests SX127X module to be setup in lora mode 
+     * @return error state
+     */
+    int8_t setLORA();
+
+    /**
+     *  Function: Checks if SF is a valid value.
+     * @param  spr Spread factor
+     * @return     true if aviailbe
+     */
+    boolean isSF(uint8_t spr);
+
+    /**
+     * Function: Gets the SF within the module is configured.
+     * @return    0 if no error
+     */
+    int8_t  getSF();
+
+    /**
+     * Function:   Checks if BW is a valid value.
+     * @param  band desired band
+     * @return      true if valid
+     */
+    boolean isBW(uint16_t band);
+
+    /**
+     * Function: Reads the current BW and returns 0 if read matches the previously set value
+     * @return [description]
+     */
+    int8_t  getBW();
+
+    /**
+     *  Function: Checks if CR is a valid value.
+     * @param  cod CR
+     * @return     1 if valid
+     */
+    boolean isCR(uint8_t cod);
+
+    /**
+     *  Function: Indicates the CR within the module is configured.
+     * @return 0 if no error 
+     */
+    int8_t  getCR();
+
+    /**
+     * Function: sets the maximum current the SX127X device has access 
+     * @param  rate current rate 
+     * @return      error state 0 if no error 
+     */
+    int8_t setMaxCurrent(uint8_t rate);
 
     /**
      * Function:  responsible for setting up the frequency channel and writing to the registers
@@ -440,14 +523,12 @@ public:
      */
     int8_t  setCR(uint8_t cod);
 
-
     /**
      * Function      responsible for writing the desired bandwidth to the resisters
      * @param  band  desired band
      * @return       0 if error 
      */
     int8_t  setBW(uint16_t band);
-
 
     /**
      * Function: Sets the indicated SF in the module.
@@ -456,98 +537,6 @@ public:
      */
     int8_t setSF(uint8_t spr);
 
-private:
-
-    /*
-     Function: Reads the indicated register.
-     Returns: The content of the register
-     Parameters:
-       address: address register to read from
-    */
-    byte readRegister(byte address);
-
-    /*
-     Function: Writes on the indicated register.
-     Returns: Nothing
-     Parameters:
-       address: address register to write in
-       data : value to write in the register
-    */
-    void writeRegister(byte address, byte data);
-
-
-    /**
-     * Function: writes & read to the indicated register return 0 if equal
-     * @param  address  address
-     * @param  data     byte to write
-     * @return          0 if equal
-     */
-    int8_t writeReadRegister(byte address, byte data);
-
-
-
-    /**
-     * Function: Clears the interruption flags
-     * @return Nothing
-     */
-    int8_t clearFlags();
-
-
-    /**
-     * Function: requests SX127X module to be setup in lora mode 
-     * @return error state
-     */
-    int8_t setLORA();
-
-
-    /**
-     *  Function: Checks if SF is a valid value.
-     * @param  spr Spread factor
-     * @return     true if aviailbe
-     */
-    boolean isSF(uint8_t spr);
-
-    /**
-     * Function: Gets the SF within the module is configured.
-     * @return    0 if no error
-     */
-    int8_t  getSF();
-
-
-    /**
-     * Function:   Checks if BW is a valid value.
-     * @param  band desired band
-     * @return      true if valid
-     */
-    boolean isBW(uint16_t band);
-
-    /**
-     * Function: Reads the current BW and returns 0 if read matches the previously set value
-     * @return [description]
-     */
-    int8_t  getBW();
-
-
-    /**
-     *  Function: Checks if CR is a valid value.
-     * @param  cod CR
-     * @return     1 if valid
-     */
-    boolean isCR(uint8_t cod);
-
-    /**
-     *  Function: Indicates the CR within the module is configured.
-     * @return 0 if no error 
-     */
-    int8_t  getCR();
-
-
-    /**
-     * Function: sets the maximum current the SX127X device has access 
-     * @param  rate current rate 
-     * @return      error state 0 if no error 
-     */
-    int8_t setMaxCurrent(uint8_t rate);
 
 public:
 
@@ -557,8 +546,7 @@ public:
     uint16_t _payloadlength;
     uint8_t _nodeAddress; 
     uint8_t _packetNumber;
-    int8_t _SNR;
-
+    
 private:
 
     uint8_t _board;
