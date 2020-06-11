@@ -118,7 +118,6 @@ void setup()
   Serial.print(F("Setting Mode: state "));
   Serial.println(e, DEC);
 
-    sx1272._enableCarrierSense=false;  
 
   if (loraMode==1)
     w_timer=2500;

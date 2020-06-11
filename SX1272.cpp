@@ -1,7 +1,6 @@
 
 
 #include "SX1272.h"
-#include <SPI.h>
 
 #define SX1272_REGISTER_VERSION_CODE 0x22
 #define SX1276_REGISTER_VERSION_CODE 0x12
@@ -78,6 +77,11 @@ __attribute__((weak)) uint8_t delay_ms(uint16_t delayms)
 
 
 
+SX1272::~SX1272()
+{
+    return; 
+}
+
 SX1272::SX1272()
 {
     // Initialize class variables
@@ -88,6 +92,7 @@ SX1272::SX1272()
     _power = 15;
     _packetNumber = 0;
     _syncWord=0x12;
+    return; 
 };
 
 
@@ -158,6 +163,7 @@ void SX1272::OFF()
     // Powering the module
     gpio_mode(SX1272_SS,OUTPUT);
     gpio_write(SX1272_SS,LOW);
+    return;
 }
 
 /*
@@ -276,8 +282,6 @@ int8_t SX1272::setLORA()
         }
     } while (st0!=LORA_STANDBY_MODE); 
         
-    if(error == 0 )
-        _modem = LORA;
 
     return error;
 }
@@ -304,8 +308,6 @@ int8_t SX1272::setMode(uint8_t mode)
     setCR(CR_5);     // always set the coding rate to 5
     setSF(spreadingFactor);       // set the spreading factor
     setBW(bandwidth);      // Set the bandwidth 
-
-    _loraMode=mode;
 
     writeRegister(REG_OP_MODE, st0);    // Getting back to previous status
     delay_ms(100);
@@ -518,7 +520,7 @@ boolean SX1272::isBW(uint16_t band)
                 return false;
         }
     }
-
+    return false; 
 }
 
 /**
@@ -658,7 +660,7 @@ boolean SX1272::isCR(uint8_t cod)
     default:
         return false;
     }
-
+    return false; 
 }
 
 /**
@@ -915,6 +917,15 @@ int8_t SX1272::setPreambleLength(uint16_t l)
  */
 uint8_t SX1272::getNodeAddress()
 {
+    uint8_t st0; 
+    st0 = readRegister(REG_OP_MODE);    // Save the previous status
+    // Allowing access to FSK registers while in LoRa standby mode
+    writeRegister(REG_OP_MODE, LORA_STANDBY_FSK_REGS_MODE);
+        // Saving node address
+    _nodeAddress = readRegister(REG_NODE_ADRS);
+
+    writeRegister(REG_OP_MODE, st0); 
+
     return _nodeAddress;
 }
 
@@ -1037,8 +1048,8 @@ uint8_t SX1272::receive()
 {
     uint8_t state = 1;
 
-    // Initializing packet_received struct
-    memset( &packet_received, 0x00, sizeof(packet_received) );
+    // Initializing _packet_received struct
+    memset( &_packet_received, 0x00, sizeof(_packet_received) );
 
     writeRegister(REG_PA_RAMP, 0x08);
 
@@ -1056,10 +1067,10 @@ uint8_t SX1272::receive()
     writeRegister(REG_FIFO_RX_BYTE_ADDR, 0x00); // Setting current value of reception buffer pointer
 
 
-    packet_sent.length =MAX_LENGTH;
+    _packet_sent.length =MAX_LENGTH;
 
     // write out packet length 
-    writeRegister(REG_PAYLOAD_LENGTH_LORA, packet_sent.length);
+    writeRegister(REG_PAYLOAD_LENGTH_LORA, _packet_sent.length);
 
     writeRegister(REG_OP_MODE, LORA_RX_MODE);     // LORA mode - Rx
 
@@ -1082,22 +1093,22 @@ int8_t SX1272::getPacket(void)
     {
         writeRegister(REG_FIFO_ADDR_PTR, 0x00);     // Setting address pointer in FIFO data buffer
 
-        packet_received.dst = readRegister(REG_FIFO);   // Storing first byte of the received packet
-        packet_received.type = readRegister(REG_FIFO);      // Reading second byte of the received packet
-        packet_received.src = readRegister(REG_FIFO);       // Reading second byte of the received packet
-        packet_received.packnum = readRegister(REG_FIFO);   // Reading third byte of the received packet
+        _packet_received.dst = readRegister(REG_FIFO);   // Storing first byte of the received packet
+        _packet_received.type = readRegister(REG_FIFO);      // Reading second byte of the received packet
+        _packet_received.src = readRegister(REG_FIFO);       // Reading second byte of the received packet
+        _packet_received.packnum = readRegister(REG_FIFO);   // Reading third byte of the received packet
 
-        packet_received.length = readRegister(REG_RX_NB_BYTES);
+        _packet_received.length = readRegister(REG_RX_NB_BYTES);
 
-        _payloadlength=packet_received.length;
+        _payloadlength=_packet_received.length;
        
         for(unsigned int i = 0; i < _payloadlength; i++)
         {
-            packet_received.data[i] = readRegister(REG_FIFO); // Storing payload
+            _packet_received.data[i] = readRegister(REG_FIFO); // Storing payload
         }
 
         _payloadlength -= OFFSET_PAYLOADLENGTH;
-        Serial.write( packet_received.data, _payloadlength);
+        Serial.write( _packet_received.data, _payloadlength);
         writeRegister(REG_FIFO_ADDR_PTR, 0x00);  // Setting address pointer in FIFO data buffer
         // clear the flags, this pulls DIO_0 low 
         clearFlags();   
@@ -1147,25 +1158,24 @@ int8_t SX1272::sendPacket(uint8_t dest, uint8_t *payload, uint8_t length)
     writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);  // set lora module into standby mode
   
     // Sending new packet
-    _destination = dest;    // Storing destination in a global variable
-    packet_sent.dst = dest;  // Setting destination in packet structure
-    packet_sent.src = _nodeAddress; // Setting source in packet structure
-    packet_sent.packnum = _packetNumber;    // Setting packet number in packet structure
-    packet_sent.length = _payloadlength + OFFSET_PAYLOADLENGTH;
+    _packet_sent.dst = dest;  // Setting destination in packet structure
+    _packet_sent.src = _nodeAddress; // Setting source in packet structure
+    _packet_sent.packnum = _packetNumber;    // Setting packet number in packet structure
+    _packet_sent.length = _payloadlength + OFFSET_PAYLOADLENGTH;
 
     // write out packet length 
-    writeRegister(REG_PAYLOAD_LENGTH_LORA, packet_sent.length);
+    writeRegister(REG_PAYLOAD_LENGTH_LORA, _packet_sent.length);
 
-    packet_sent.type = (PKT_TYPE_DATA | PKT_FLAG_DATA_WAPPKEY);
+    _packet_sent.type = (PKT_TYPE_DATA | PKT_FLAG_DATA_WAPPKEY);
 
     // Setting address pointer in FIFO data buffer
     writeRegister(REG_FIFO_ADDR_PTR, 0x80);  
 
     // Writing packet to send in FIFO
-    writeRegister(REG_FIFO, packet_sent.dst);       // Writing the destination in FIFO
-    writeRegister(REG_FIFO, packet_sent.type);      // Writing the packet type in FIFO
-    writeRegister(REG_FIFO, packet_sent.src);       // Writing the source in FIFO
-    writeRegister(REG_FIFO, packet_sent.packnum);   // Writing the packet number in FIFO
+    writeRegister(REG_FIFO, _packet_sent.dst);       // Writing the destination in FIFO
+    writeRegister(REG_FIFO, _packet_sent.type);      // Writing the packet type in FIFO
+    writeRegister(REG_FIFO, _packet_sent.src);       // Writing the source in FIFO
+    writeRegister(REG_FIFO, _packet_sent.packnum);   // Writing the packet number in FIFO
    
     for(unsigned int i = 0; i < _payloadlength; i++)
     {

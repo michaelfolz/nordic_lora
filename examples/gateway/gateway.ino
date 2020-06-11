@@ -242,17 +242,7 @@ void startConfig() {
   PRINT_VALUE("%d", e);
   PRINTLN;
 
-  if (optAESgw)
-      PRINT_CSTSTR("%s","^$Handle AES encrypted data\n");
 
-  if (optRAW) {
-      PRINT_CSTSTR("%s","^$Raw format, not assuming any header in reception\n");  
-      // when operating n raw format, the SX1272 library do not decode the packet header but will pass all the payload to stdout
-      // note that in this case, the gateway may process packet that are not addressed explicitly to it as the dst field is not checked at all
-      // this would be similar to a promiscuous sniffer, but most of real LoRa gateway works this way 
-      sx1272._rawFormat=true;
-  }
-  
   // Print a success message
   PRINT_CSTSTR("%s","^$SX1272/76 configured ");
 
@@ -349,39 +339,28 @@ void loop(void)
 
          uint8_t tmp_length=sx1272._payloadlength;
          
-         sprintf(sprintf_buf,"--- rxlora. dst=%d type=0x%.2X src=%d seq=%d len=%d SNR=%d RSSIpkt=%d BW=%d CR=4/%d SF=%d\n", 
-                   sx1272.packet_received.dst,
-                   sx1272.packet_received.type, 
-                   sx1272.packet_received.src,
-                   sx1272.packet_received.packnum,
+         sprintf(sprintf_buf,"--- rxlora. dst=%d type=0x%.2X src=%d seq=%d len=%d SNR=%d RSSIpkt=%d\n", 
+                   sx1272._packet_received.dst,
+                   sx1272._packet_received.type, 
+                   sx1272._packet_received.src,
+                   sx1272._packet_received.packnum,
                    tmp_length, 
                    sx1272._SNR,
-                   rssi_packet,
-                   (sx1272._bandwidth==BW_125)?125:((sx1272._bandwidth==BW_250)?250:500),
-                   sx1272._codingRate+4,
-                   sx1272._spreadingFactor);
+                   rssi_packet);
                    
          PRINT_STR("%s",sprintf_buf);
 
          // provide a short output for external program to have information about the received packet
          // ^psrc_id,seq,len,SNR,RSSI
          sprintf(sprintf_buf,"^p%d,%d,%d,%d,%d,%d,%d\n",
-                   sx1272.packet_received.dst,
-                   sx1272.packet_received.type,                   
-                   sx1272.packet_received.src,
-                   sx1272.packet_received.packnum, 
+                   sx1272._packet_received.dst,
+                   sx1272._packet_received.type,                   
+                   sx1272._packet_received.src,
+                   sx1272._packet_received.packnum, 
                    tmp_length,
                    sx1272._SNR,
                    rssi_packet);
-                   
-         PRINT_STR("%s",sprintf_buf);          
-
-         // ^rbw,cr,sf
-         sprintf(sprintf_buf,"^r%d,%d,%d\n", 
-                   (sx1272._bandwidth==BW_125)?125:((sx1272._bandwidth==BW_250)?250:500),
-                   sx1272._codingRate+4,
-                   sx1272._spreadingFactor);
-                   
+ 
          PRINT_STR("%s",sprintf_buf);  
 
     
