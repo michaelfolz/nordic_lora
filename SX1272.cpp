@@ -6,6 +6,7 @@
 #define SX1272_REGISTER_VERSION_CODE 0x22
 #define SX1276_REGISTER_VERSION_CODE 0x12
 
+#define SX127X_MODES                             11
 
 #define REG_IRQ_RX_TIMEOUT_FLAG                  0x80
 #define REG_IRQ_RXDONE_FLAG                      0x40
@@ -18,7 +19,7 @@
 #define REG_IRQ_CAD_CHAECKED                     0x01
 
 
-uint8_t SX127X_SpreadFactor[11] =
+const uint8_t SX127X_SpreadFactor[SX127X_MODES] =
 {
     0x00,          // not a valid SF
     (SF_12),       // SF = 12
@@ -33,7 +34,7 @@ uint8_t SX127X_SpreadFactor[11] =
     (SF_7)         // SF = 7
 };
 
-uint8_t SX127X_Bandwidth[11] = 
+const uint8_t SX127X_Bandwidth[SX127X_MODES] = 
 {
     0x00,                // not a valid bw
     (BW_125),            // BW = 125 KHz           
@@ -283,7 +284,11 @@ int8_t SX1272::setLORA()
 
 
 
-
+/**
+ * Function: sets up the communications based on a desired LoRA mode
+ * @param  mode  desired mode
+ * @return       0 if no issue
+ */
 int8_t SX1272::setMode(uint8_t mode)
 {
     int8_t error = 0;
@@ -308,13 +313,11 @@ int8_t SX1272::setMode(uint8_t mode)
 }
 
 
-/*
- Function: Checks if SF is a valid value.
- Returns: Boolean that's 'true' if the SF value exists and
-          it's 'false' if the SF value does not exist.
- Parameters:
-   spr: spreading factor value to check.
-*/
+/**
+ *  Function: Checks if SF is a valid value.
+ * @param  spr Spread factor
+ * @return     true if aviailbe
+ */
 boolean SX1272::isSF(uint8_t spr)
 {
 
@@ -338,48 +341,40 @@ boolean SX1272::isSF(uint8_t spr)
     return false; 
 }
 
-/*
- Function: Gets the SF within the module is configured.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-   state = -1 --> Forbidden command for this protocol
-*/
+/**
+ * Function: Gets the SF within the module is configured.
+ * @return    0 if no error
+ */
 int8_t  SX1272::getSF()
 {
-    int8_t state = 2;
+    int8_t error = 0;
     uint8_t config2;
 
   
     // take out bits 7-4 from REG_MODEM_CONFIG2 indicates _spreadingFactor
     config2 = (readRegister(REG_MODEM_CONFIG2)) >> 4;
     _spreadingFactor = config2;
-    state = 1;
 
-    if( (config2 == _spreadingFactor) && isSF(_spreadingFactor) )
+
+    if(!isSF(_spreadingFactor) )
     {
-        state = 0;
+        return -1;
     }
  
-    return state;
+    return error;
 }
 
 
 
-/*
- Function: Sets the indicated SF in the module.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
- Parameters:
-   spr: spreading factor value to set in LoRa modem configuration.
-*/
-uint8_t SX1272::setSF(uint8_t spr)
+/**
+ * Function: Sets the indicated SF in the module.
+ * @param  spr [description]
+ * @return     0 if no error 
+ */
+int8_t SX1272::setSF(uint8_t spr)
 {
     uint8_t st0;
-    int8_t state = 2;
+    int8_t error = 0;
     uint8_t config1;
     uint8_t config2;
 
@@ -443,7 +438,6 @@ uint8_t SX1272::setSF(uint8_t spr)
     // Check if it is neccesary to set special settings for SF=6
     if( spr != SF_6 )
     {
-
         // LoRa detection Optimize: 0x03 --> SF7 to SF12
         writeRegister(REG_DETECT_OPTIMIZE, 0x03);
 
@@ -452,14 +446,8 @@ uint8_t SX1272::setSF(uint8_t spr)
     }
 
     
-    if (_board==SX1272Chip) {
-        // comment by C. Pham
-        // bit 9:8 of SymbTimeout are then 11
-        // single_chan_pkt_fwd uses 00 and then 00001000
-        // why?
-        // sets bit 2-0 (AgcAutoOn and SymbTimout) for any SF value
-        //config2 = config2 | B00000111;
-        
+    if (_board==SX1272Chip) 
+    {   
         config2 = config2 | B00000100;
         writeRegister(REG_MODEM_CONFIG1, config1);      // Update config1
     }
@@ -475,48 +463,25 @@ uint8_t SX1272::setSF(uint8_t spr)
 
     delay_ms(100);
 
-    
-    byte configAgc;
-    uint8_t theLDRBit;
-
-    if (_board==SX1272Chip) {
-        config1 = (readRegister(REG_MODEM_CONFIG1));    // Save config1 to check update
-        config2 = (readRegister(REG_MODEM_CONFIG2));    // Save config2 to check update
-        // comment by C. Pham
-        // (config2 >> 4) ---> take out bits 7-4 from REG_MODEM_CONFIG2 (=_spreadingFactor)
-        // bitRead(config1, 0) ---> take out bits 1 from config1 (=LowDataRateOptimize)
-        // config2 is only for the AgcAutoOn
-        configAgc=config2;
-        theLDRBit=0;
-    }
-    else {
-        config1 = (readRegister(REG_MODEM_CONFIG3));    // Save config1 to check update
-        config2 = (readRegister(REG_MODEM_CONFIG2));
-        // LowDataRateOptimize is in REG_MODEM_CONFIG3
-        // AgcAutoOn is in REG_MODEM_CONFIG3
-        configAgc=config1;
-        theLDRBit=3;
-    }
-
     writeRegister(REG_OP_MODE, st0);    // Getting back to previous status
     delay_ms(100);
 
-    if( isSF(spr) )
-    { // Checking available value for _spreadingFactor
-        state = 0;
-        _spreadingFactor = spr;
+    // check if valid 
+    if(!isSF(spr) )
+    { 
+    // Checking available value for _spreadingFactor
+        return -1; 
     }
-
-    return state;
+    _spreadingFactor = spr;
+    
+    return error;
 }
 
-/*
- Function: Checks if BW is a valid value.
- Returns: Boolean that's 'true' if the BW value exists and
-          it's 'false' if the BW value does not exist.
- Parameters:
-   band: bandwidth value to check.
-*/
+/**
+ * Function:   Checks if BW is a valid value.
+ * @param  band desired band
+ * @return      true if valid
+ */
 boolean SX1272::isBW(uint16_t band)
 {
 
@@ -556,6 +521,10 @@ boolean SX1272::isBW(uint16_t band)
 
 }
 
+/**
+ * Function: Reads the current BW and returns 0 if read matches the previously set value
+ * @return [description]
+ */
 int8_t  SX1272::getBW()
 {
     uint8_t error = 0;
@@ -581,7 +550,11 @@ int8_t  SX1272::getBW()
     return error;
 }
 
-
+/**
+ * Function      responsible for writing the desired bandwidth to the resisters
+ * @param  band  desired band
+ * @return       0 if error 
+ */
 int8_t  SX1272::setBW(uint16_t band)
 {
     uint8_t st0;
@@ -654,7 +627,6 @@ int8_t  SX1272::setBW(uint16_t band)
         }
     }
 
-
     uint8_t error = writeReadRegister(REG_MODEM_CONFIG1,config1);       // Update config1
     if(error ==0)
     {
@@ -665,13 +637,11 @@ int8_t  SX1272::setBW(uint16_t band)
     return state;
 }
 
-/*
- Function: Checks if CR is a valid value.
- Returns: Boolean that's 'true' if the CR value exists and
-          it's 'false' if the CR value does not exist.
- Parameters:
-   cod: coding rate value to check.
-*/
+/**
+ *  Function: Checks if CR is a valid value.
+ * @param  cod CR
+ * @return     1 if valid
+ */
 boolean SX1272::isCR(uint8_t cod)
 {
 
@@ -691,56 +661,42 @@ boolean SX1272::isCR(uint8_t cod)
 
 }
 
-/*
- Function: Indicates the CR within the module is configured.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-   state = -1 --> Forbidden command for this protocol
-*/
+/**
+ *  Function: Indicates the CR within the module is configured.
+ * @return 0 if no error 
+ */
 int8_t  SX1272::getCR()
 {
-    int8_t state = 2;
+    int8_t error = 0;
     uint8_t config1;
-  
-    
+      
     if (_board==SX1272Chip) {
         // take out bits 7-3 from REG_MODEM_CONFIG1 indicates _bandwidth & _codingRate
-        config1 = (readRegister(REG_MODEM_CONFIG1)) >> 3;
-        config1 = config1 & B00000111;  // clears bits 7-3 ---> clears _bandwidth
+        config1 = ((readRegister(REG_MODEM_CONFIG1)) >> 3);
     }
     else {
         // take out bits 7-1 from REG_MODEM_CONFIG1 indicates _bandwidth & _codingRate
         config1 = (readRegister(REG_MODEM_CONFIG1)) >> 1;
-        config1 = config1 & B00000111;  // clears bits 7-3 ---> clears _bandwidth
     }
 
-    _codingRate = config1;
-    state = 1;
+    _codingRate = config1 & B00000111;
 
-    if( (config1 == _codingRate) && isCR(_codingRate) )
+    if(!isCR(_codingRate) )
     {
-        state = 0;
-
+        error = -1;
     }
 
-    return state;
+    return error;
 }
 
-/*
- Function: Sets the indicated CR in the module.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-   state = -1 --> Forbidden command for this protocol
- Parameters:
-   cod: coding rate value to set in LoRa modem configuration.
-*/
+/**
+ * Function:    Sets the indicated CR in the module.
+ * @param  cod  current CR
+ * @return      0 if error occurs 
+ */
 int8_t  SX1272::setCR(uint8_t cod)
 {
-    int8_t error = 2;
+    int8_t error = 0;
     uint8_t st0;
     uint8_t config1;
 
@@ -799,101 +755,23 @@ int8_t  SX1272::setCR(uint8_t cod)
         return -1; 
     }
 
-    writeRegister(REG_MODEM_CONFIG1, config1);      // Update config1
-
-
-    delay_ms(50);
-
-    if(config1 != readRegister(REG_MODEM_CONFIG1))
+    if( writeReadRegister(REG_MODEM_CONFIG1, config1) != 0)       // Update config1
     {
-        return 1; 
+        return -1;
     }
-
 
     writeRegister(REG_OP_MODE,st0); // Getting back to previous status
     delay_ms(100);
     return error;
 }
 
-/*
- Function: Checks if channel is a valid value.
- Returns: Boolean that's 'true' if the CR value exists and
-          it's 'false' if the CR value does not exist.
- Parameters:
-   ch: frequency channel value to check.
-*/
-boolean SX1272::isChannel(uint32_t ch)
-{
 
 
-    // Checking available values for _channel
-    switch(ch)
-    {
-    case CH_10_868:
-    case CH_11_868:
-    case CH_12_868:
-    case CH_13_868:
-    case CH_14_868:
-    case CH_15_868:
-    case CH_16_868:
-    case CH_17_868:
-        //added by C. Pham
-    case CH_18_868:
-        //end
-    case CH_00_900:
-    case CH_01_900:
-    case CH_02_900:
-    case CH_03_900:
-    case CH_04_900:
-    case CH_05_900:
-    case CH_06_900:
-    case CH_07_900:
-    case CH_08_900:
-    case CH_09_900:
-    case CH_10_900:
-    case CH_11_900:
-        return true;
-        break;
-
-    default:
-        return false;
-    }
-
-}
-
-/*
- Function: Indicates the frequency channel within the module is configured.
- Returns: Integer that determines if there has been any error
-   state = 2  --> The command has not been executed
-   state = 1  --> There has been an error while executing the command
-   state = 0  --> The command has been executed with no errors
-*/
-uint8_t SX1272::getChannel()
-{
-    uint8_t state = 2;
-    uint32_t ch;
-    uint8_t freq3;
-    uint8_t freq2;
-    uint8_t freq1;
-
-    freq3 = readRegister(REG_FRF_MSB);  // frequency channel MSB
-    freq2 = readRegister(REG_FRF_MID);  // frequency channel MID
-    freq1 = readRegister(REG_FRF_LSB);  // frequency channel LSB
-    ch = ((uint32_t)freq3 << 16) + ((uint32_t)freq2 << 8) + (uint32_t)freq1;
-    _channel = ch;                      // frequency channel
-
-    if( (_channel == ch) && isChannel(_channel) )
-    {
-        state = 0;
-    }
-    else
-    {
-        state = 1;
-    }
-    return state;
-}
-
-
+/**
+ * Function:  responsible for setting up the frequency channel and writing to the registers
+ * @param     ch desired channel 
+ * @return    0 if no error occurs
+ */
 int8_t SX1272::setChannel(uint32_t ch)
 {
     int8_t error = 2;
@@ -928,16 +806,25 @@ int8_t SX1272::setChannel(uint32_t ch)
 }
 
 
+/**
+ * Function: Responsible for pulling the current power from the register and returns it
+ * @return current power 
+ */
 uint8_t SX1272::getPower()
 {
     return readRegister(REG_PA_CONFIG);
 }
 
 
+/**
+ * Function: responsible for setting the output power for the antenna
+ * @param  p desired power rate
+ * @return   0 if error occurs 
+ */
 int8_t SX1272::setPower(char p)
 {
-     uint8_t st0;
-    int8_t state = 2;
+    uint8_t st0;
+    int8_t error = 0;
     byte value = 0x00;
 
     p = SX1272_POWER_MAXIMUM; 
@@ -976,10 +863,9 @@ int8_t SX1272::setPower(char p)
     _power=value;
 
     writeRegister(REG_OP_MODE, st0);    // Getting back to previous status
-    delay_ms(100);
-    return state;
-}
 
+    return error;
+}
 
 /**
  * Function: Gets the preamble length from the module.
@@ -1032,25 +918,21 @@ uint8_t SX1272::getNodeAddress()
     return _nodeAddress;
 }
 
-
+/**
+ * Function: responsible for setting up the node address
+ * @param  addr desired node addr
+ * @return      0 if error occurs
+ */
 int8_t SX1272::setNodeAddress(uint8_t addr)
 {
+    uint8_t error = 0;
     uint8_t st0;
     byte value;
-    uint8_t error = 0;
-
     // Saving node address
     _nodeAddress = addr;
     st0 = readRegister(REG_OP_MODE);      // Save the previous status
 
-    if( _modem == LORA )
-    { // Allowing access to FSK registers while in LoRa standby mode
-        writeRegister(REG_OP_MODE, LORA_STANDBY_FSK_REGS_MODE);
-    }
-    else
-    { //Set FSK Standby mode to write in registers
-        writeRegister(REG_OP_MODE, FSK_STANDBY_MODE);
-    }
+    writeRegister(REG_OP_MODE, LORA_STANDBY_FSK_REGS_MODE);
 
     // Storing node and broadcast address
     writeRegister(REG_NODE_ADRS, addr);
@@ -1185,16 +1067,15 @@ uint8_t SX1272::receive()
 }
 
 /**
- * Function: Should only be called when DIO_0 is asserted, pulls recieved packet from the registers
+ * Function: Should only be called when DIO_0 is asserted, pulls recieved packet from the registers stores it in global 
  * @return      error state 0 if no error 
  */
-int8_t SX1272::getPacket(uint16_t wait)
+int8_t SX1272::getPacket(void)
 {
     uint8_t error = 0;
     byte value = 0x00;
     unsigned long previous;
     boolean p_received = false;
-
 
     value = readRegister(REG_IRQ_FLAGS);
     if(value && REG_IRQ_RXDONE_FLAG) // &&  (!(value, REG_IRQ_VALID_HEADER_FLAG) == 0) )
@@ -1218,7 +1099,7 @@ int8_t SX1272::getPacket(uint16_t wait)
         _payloadlength -= OFFSET_PAYLOADLENGTH;
         Serial.write( packet_received.data, _payloadlength);
         writeRegister(REG_FIFO_ADDR_PTR, 0x00);  // Setting address pointer in FIFO data buffer
-        // 
+        // clear the flags, this pulls DIO_0 low 
         clearFlags();   
     }
   
@@ -1226,6 +1107,11 @@ int8_t SX1272::getPacket(uint16_t wait)
 }
 
 
+/**
+ * Function: Checks the IRQ register, returns 0 is the TX_DONE_Flag has been set. 
+ *         Typically read after DIO_5 is de-asserted. 
+ * @return error state
+ */
 int8_t SX1272::checkTransmissionStatus(void)
 {
     uint8_t error = 0;
@@ -1241,6 +1127,13 @@ int8_t SX1272::checkTransmissionStatus(void)
     return error;
 }
 
+/**
+ * Function: sets up the registers and places the lora module into TX mode
+ * @param  dest    destination address
+ * @param  payload pointer to payload
+ * @param  length  length of payload
+ * @return         returns 0 if no errors 
+ */
 int8_t SX1272::sendPacket(uint8_t dest, uint8_t *payload, uint8_t length)
 {
     uint8_t error = 0;
@@ -1288,7 +1181,11 @@ int8_t SX1272::sendPacket(uint8_t dest, uint8_t *payload, uint8_t length)
 }
 
 
-
+/**
+ * Function:  writes the desired syncword to the register
+ * @param     sw the desired sync word 
+ * @return    0 if no error occurs
+ */
 int8_t  SX1272::setSyncWord(uint8_t sw)
 {
     int8_t error =0; 
@@ -1311,6 +1208,10 @@ int8_t  SX1272::setSyncWord(uint8_t sw)
 }
 
 
+/**
+ * Function:  places the lora module into sleep mode
+ * @return    0 if successful 
+ */
 int8_t SX1272::setSleepMode() 
 {
     int8_t error = 0;

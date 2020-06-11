@@ -438,7 +438,7 @@ uint8_t delay_ms(uint16_t delayms)
 void blink() {
   uint8_t e =0;
   Serial.println("rx packet."); 
-  e=sx1272.getPacket(MAX_TIMEOUT);
+  e=sx1272.getPacket();
   if(!e)
          rx_packet = 1; 
           

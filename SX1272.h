@@ -331,61 +331,16 @@
 
 
 
-const double SignalBwLog[]
-{
-    5.0969100130080564143587833158265,
-    5.397940008672037609572522210551,
-    5.6989700043360188047862611052755
-};
 
-//! Structure :
-/*!
- */
+
 struct pack
 {
-    // added by C. Pham
-#ifdef W_NET_KEY    
-    uint8_t netkey[NET_KEY_LENGTH];
-#endif  
-    //! Structure Variable : Packet destination
-    /*!
-    */
     uint8_t dst;
-
-    // added by C. Pham
-    //! Structure Variable : Packet type
-    /*!
-    */
     uint8_t type;
-
-    //! Structure Variable : Packet source
-    /*!
-    */
     uint8_t src;
-
-    //! Structure Variable : Packet number
-    /*!
-    */
     uint8_t packnum;
-
-    // modified by C. Pham
-    // will not be used in the transmitted packet
-    //! Structure Variable : Packet length
-    /*!
-    */
     uint8_t length;
-
-    //! Structure Variable : Packet payload
-    /*!
-    */
     uint8_t data[MAX_PAYLOAD];
-
-    // modified by C. Pham
-    // will not be used in the transmitted packet
-    //! Structure Variable : Retry number
-    /*!
-    */
-    uint8_t retry;
 };
 
 /******************************************************************************
@@ -544,7 +499,7 @@ public:
     \param uint8_t spr : spreading factor value to set in the configuration.
     \return '0' on success, '1' otherwise
      */
-    uint8_t setSF(uint8_t spr);
+    int8_t setSF(uint8_t spr);
 
     //! It is true if the BW selected exists.
     /*!
@@ -873,20 +828,9 @@ public:
     */
     uint8_t getPacketMAXTimeout();
 
-    //! It reads a received packet from the FIFO, if it arrives before ending '_sendTime' time.
-    /*!
-     *
-    \return '0' on success, '1' otherwise
-    */
-    int8_t getPacket();
 
-    //! It receives and gets a packet from FIFO, if it arrives before ending 'wait' time.
-    /*!
-     *
-    \param uint16_t wait : time to wait while there is no a complete packet received.
-    \return '0' on success, '1' otherwise
-    */
-    int8_t getPacket(uint16_t wait);
+
+    int8_t getPacket(void);
 
     //! It sends the packet stored in FIFO before ending MAX_TIMEOUT.
     /*!

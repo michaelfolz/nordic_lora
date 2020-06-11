@@ -235,7 +235,6 @@ Serial.print(tx_state);
       else 
       {
         tx_state = TX_ERROR;
-      
       }
 
       break;
