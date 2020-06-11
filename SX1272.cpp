@@ -1,6 +1,12 @@
 
 #include "SX1272.h"
 
+SX1272_LoRA_Settings LoRA_Default = 
+{
+    'x', CH_10_868 , 4, 0x12, 0x1B
+};
+
+
 const uint8_t SX127X_SpreadFactor[SX127X_MODES] =
 {
     0x00,          // not a valid SF
@@ -32,19 +38,23 @@ const uint8_t SX127X_Bandwidth[SX127X_MODES] =
 };
 
 
+__attribute__((weak)) uint8_t sx127x_print_error(const char *message, uint8_t length)
+{ 
+    // this function must be overridden by the application software. 
+    return 1;
+}
+
 __attribute__((weak)) uint8_t spi_txrx_byte(uint8_t byte)
 { 
     // this function must be overridden by the application software. 
     return 1;
 }
 
-
 __attribute__((weak)) uint8_t gpio_write(uint8_t pin, uint8_t data)
 { 
     // this function must be overridden by the application software. 
     return 1;
 }
-
 
 __attribute__((weak)) uint8_t gpio_mode(uint8_t pin, uint8_t mode)
 { 
@@ -57,7 +67,6 @@ __attribute__((weak)) uint8_t delay_ms(uint16_t delayms)
     // this function must be overridden by the application software. 
     return 1;
 }
-
 
 
 SX1272::~SX1272()
@@ -80,6 +89,14 @@ SX1272::SX1272()
 
 
 
+
+#define SX127X_ERROR_CHIP_UNSUPPORTED           0x10
+#define SX127X_ERROR_UNABLE_TO_SET_LORA_STATE   0x11
+#define SX127X_ERROR
+#define SX127X_ERROR
+#define SX127X_ERROR
+#define SX127X_ERROR
+
 /*
  Function: Sets the module ON.
  Returns: uint8_t setLORA state
@@ -93,9 +110,6 @@ uint8_t SX1272::ON()
     gpio_mode(SX1272_SS,OUTPUT);
     gpio_write(SX1272_SS,HIGH);
     delay_ms(100);
-
-    delay_ms(100);
-
     
     gpio_mode(SX1272_RST,OUTPUT);
 
@@ -117,25 +131,71 @@ uint8_t SX1272::ON()
             _board = SX1276Chip;  
             break;
         default:
-            error = -1; 
+            error = SX127X_ERROR_CHIP_UNSUPPORTED; 
             break; 
     }
 
-
+    // if the chipset isnt supported return and print errors
     if(error != 0)
+    {
+        sx127x_print_error("Unsuppoted LoRA chipset", 23);
         return error; 
+    }
 
     // set LoRa mode
     error = setLORA();
     if(error != 0)
+    {
+        sx127x_print_error("Unable to setup LoRA status", 27);
         return error; 
+    }
 
-    setMaxCurrent(0x1B);
+    // verify the current has been set 
+    error = setMaxCurrent(LoRA_Default.maxCurrent);
+    if(error != 0)
+    {
+        sx127x_print_error("Unable to set max current", 27);
+        return error; 
+    }
 
-    setSyncWord(_syncWord);
+    // verify syncword has been set 
+    error = setSyncWord(LoRA_Default.syncWord);
+    if(error != 0)
+    {
+        sx127x_print_error("Unable to set syncword", 22);
+        return error; 
+    }
 
+    // set the lora mode 
+    error = setMode(LoRA_Default.mode);
+    if(error != 0)
+    {
+        sx127x_print_error("Unable to set LoRA mode", 23);
+        return error; 
+    }
+ 
+    // set the channel 
+    error = setChannel(LoRA_Default.channelSet);
+    if(error != 0)
+    {
+        sx127x_print_error("Unable to set Channel", 21);
+        return error; 
+    }
+
+    // set power     
+    error = setPower(LoRA_Default.power);
+    if(error != 0)
+    {
+        sx127x_print_error("Unable to set power", 19);
+        return error; 
+    }
+ 
+    
     return error;
 }
+
+
+
 
 /*
  Function: Sets the module OFF.
@@ -260,12 +320,11 @@ int8_t SX1272::setLORA()
 
         if(retry > 10)
         {
-            error = -1;
+            error = SX127X_ERROR_UNABLE_TO_SET_LORA_STATE;
             break;
         }
     } while (st0!=LORA_STANDBY_MODE); 
         
-
     return error;
 }
 
@@ -288,10 +347,26 @@ int8_t SX1272::setMode(uint8_t mode)
     spreadingFactor = SX127X_SpreadFactor[mode];
     bandwidth = SX127X_Bandwidth[mode];
     
-    setCR(CR_5);     // always set the coding rate to 5
-    setSF(spreadingFactor);       // set the spreading factor
-    setBW(bandwidth);      // Set the bandwidth 
+    // always set the coding rate to 5
+    error = setCR(CR_5);    
+    if(error != 0)
+    {
 
+    }
+
+    // set the spreading factor
+    error = setSF(spreadingFactor);      
+    if(error != 0)
+    {
+        
+    }
+
+    // Set the bandwidth 
+    error = setBW(bandwidth);      
+    if(error != 0)
+    {
+        
+    }
     writeRegister(REG_OP_MODE, st0);    // Getting back to previous status
     delay_ms(100);
     return error;
@@ -538,18 +613,17 @@ int8_t  SX1272::getBW()
 /**
  * Function      responsible for writing the desired bandwidth to the resisters
  * @param  band  desired band
- * @return       0 if error 
+ * @return       0 if no error 
  */
 int8_t  SX1272::setBW(uint16_t band)
 {
     uint8_t st0;
-    int8_t state = 2;
+    int8_t error = 0;
     uint8_t config1;
 
-    if(!isBW(band) )
+    if(!isBW(band))
     {
-        state = 1;
-        return state;
+        return -1;
     }
 
     st0 = readRegister(REG_OP_MODE);    // Save the previous status
@@ -611,15 +685,19 @@ int8_t  SX1272::setBW(uint16_t band)
                 break;
         }
     }
+    else 
+    {
+        return -1; 
+    }
 
-    uint8_t error = writeReadRegister(REG_MODEM_CONFIG1,config1);       // Update config1
+    error = writeReadRegister(REG_MODEM_CONFIG1,config1);       // Update config1
     if(error ==0)
     {
         _bandwidth = band;
     }
     writeRegister(REG_OP_MODE, st0);    // Getting back to previous status
    
-    return state;
+    return error;
 }
 
 /**
@@ -746,11 +824,9 @@ int8_t  SX1272::setCR(uint8_t cod)
     }
 
     writeRegister(REG_OP_MODE,st0); // Getting back to previous status
-    delay_ms(100);
+
     return error;
 }
-
-
 
 /**
  * Function:  responsible for setting up the frequency channel and writing to the registers
@@ -790,7 +866,6 @@ int8_t SX1272::setChannel(uint32_t ch)
     return error;
 }
 
-
 /**
  * Function: Responsible for pulling the current power from the register and returns it
  * @return current power 
@@ -799,7 +874,6 @@ uint8_t SX1272::getPower()
 {
     return readRegister(REG_PA_CONFIG);
 }
-
 
 /**
  * Function: responsible for setting the output power for the antenna
@@ -950,21 +1024,7 @@ int8_t SX1272::setNodeAddress(uint8_t addr)
  */
 int8_t SX1272::getSNR()
 {   
-    int8_t SNR = readRegister(REG_PKT_SNR_VALUE);
-
-    if( SNR & 0x80 ) // The SNR sign bit is 1
-    {
-        // Invert and divide by 4
-        SNR = ( ( ~SNR + 1 ) & 0xFF ) >> 2;
-        return -SNR;
-    }
-    else
-    {
-        // Divide by 4
-        return  ( SNR & 0xFF ) >> 2;
-    }
-
-    return 0;
+    return  readRegister(REG_PKT_SNR_VALUE);
 }
 
 
@@ -1021,7 +1081,6 @@ int8_t SX1272::setMaxCurrent(uint8_t rate)
    
     return error;
 }
-
 
 /**
  * Function: Places SX1272 into RX mode 
@@ -1100,7 +1159,6 @@ int8_t SX1272::getPacket(void)
     return error;
 }
 
-
 /**
  * Function: Checks the IRQ register, returns 0 is the TX_DONE_Flag has been set. 
  *         Typically read after DIO_5 is de-asserted. 
@@ -1176,7 +1234,6 @@ int8_t SX1272::sendPacket(uint8_t dest, uint8_t *payload, uint8_t length)
     return error;
 }
 
-
 /**
  * Function:  writes the desired syncword to the register
  * @param     sw the desired sync word 
@@ -1202,7 +1259,6 @@ int8_t  SX1272::setSyncWord(uint8_t sw)
     delay_ms(100);
     return error;
 }
-
 
 /**
  * Function:  places the lora module into sleep mode

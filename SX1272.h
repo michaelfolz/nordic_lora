@@ -195,7 +195,6 @@
 #define BW_250                                      0x08
 #define BW_500                                      0x09
 
-
 //LORA CODING RATE:
 #define CR_5                                        0x01
 #define CR_6                                        0x02
@@ -265,9 +264,7 @@
 #define REG_IRQ_CAD_CHAECKED                        0x01
 
 
-
-
-struct pack
+struct SX172_Packet
 {
     uint8_t dst;
     uint8_t type;
@@ -276,6 +273,29 @@ struct pack
     uint8_t length;
     uint8_t data[MAX_PAYLOAD];
 };
+
+
+struct SX1272_LoRA_Settings
+{
+    int8_t power;
+    uint32_t channelSet;
+    uint8_t mode;
+    uint8_t syncWord;
+    uint8_t maxCurrent;
+};
+
+
+
+typedef enum {
+    TX_NONE                                      = 0,
+    TX_COMPLETE                                  = 1,
+    TX_IN_TRANSMISSION                           = 2,
+    TX_ERROR                                     = 3,
+    TX_REQUEST_SEND                              = 4,
+    TX_SETTING_UP_TRANSMISSION                   = 5, 
+} SX127X_TX_Packet_States;
+
+
 
 /******************************************************************************
  * Class
@@ -531,8 +551,8 @@ private:
 
 public:
 
-    pack _packet_sent;
-    pack _packet_received;
+    SX172_Packet _packet_sent;
+    SX172_Packet _packet_received;
 
     uint16_t _payloadlength;
     uint8_t _nodeAddress; 
