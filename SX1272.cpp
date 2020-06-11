@@ -1,22 +1,5 @@
 
-
 #include "SX1272.h"
-
-#define SX1272_REGISTER_VERSION_CODE 0x22
-#define SX1276_REGISTER_VERSION_CODE 0x12
-
-#define SX127X_MODES                             11
-
-#define REG_IRQ_RX_TIMEOUT_FLAG                  0x80
-#define REG_IRQ_RXDONE_FLAG                      0x40
-#define REG_IRQ_PAYLOAD_CRC_ERROR_FLAG           0x20
-#define REG_IRQ_VALID_HEADER_FLAG                0x10
-
-#define REG_IRQ_TX_DONE_FLAG                     0x08
-#define REG_IRQ_CADDONE                          0x04
-#define REG_IRQ_FHSS_CHANGE_CHAN                 0x02
-#define REG_IRQ_CAD_CHAECKED                     0x01
-
 
 const uint8_t SX127X_SpreadFactor[SX127X_MODES] =
 {
@@ -1149,8 +1132,11 @@ int8_t SX1272::sendPacket(uint8_t dest, uint8_t *payload, uint8_t length)
 {
     uint8_t error = 0;
     uint8_t st0;
+    
+    if(length > MAX_PAYLOAD)
+        length = MAX_PAYLOAD; 
+
     _payloadlength = length;
-  
 
     st0 = readRegister(REG_OP_MODE);    // Save the previous status
     clearFlags();   // clear the flags 

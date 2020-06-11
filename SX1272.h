@@ -28,47 +28,30 @@
 /******************************************************************************
  * Includes
  ******************************************************************************/
-
 #include <stdlib.h>
 #include <stdint.h>
 #include <Arduino.h>
 
-#ifndef inttypes_h
-#include <inttypes.h>
-#endif
 
 /******************************************************************************
  * Definitions & Declarations
  *****************************************************************************/
+#define SX1272_SS                                   10
+#define SX1272_RST                                  3  // pin
 
-// added by C. Pham
-#define W_REQUESTED_ACK
-//#define W_NET_KEY
-#define SX1272_RST  3
+#define SX1272Chip                                  0
+#define SX1276Chip                                  1
 
-//#if defined ARDUINO_AVR_PRO || defined ARDUINO_AVR_NANO || defined ARDUINO_AVR_MINI || defined __MK20DX256__
-#define SX1272_SS 10
-//#else
-//#define SX1272_SS 2
-//#endif
 
-#define SX1272Chip  0
-#define SX1276Chip  1
-// end
-#define SX1272_debug_mode 0
-
-//! MACROS //
-#define bitRead(value, bit) (((value) >> (bit)) & 0x01)  // read a bit
 #define bitSet(value, bit) ((value) |= (1UL << (bit)))    // set bit to '1'
 #define bitClear(value, bit) ((value) &= ~(1UL << (bit))) // set bit to '0'
 
 
-#define SX1272_POWER_LOW            0x02
-#define SX1272_POWER_HIGH           0x07
-#define SX1272_POWER_MAXIMUM        0x0F
+#define SX1272_POWER_LOW                            0x02
+#define SX1272_POWER_HIGH                           0x07
+#define SX1272_POWER_MAXIMUM                        0x0F
 
 //! REGISTERS //
-
 #define REG_FIFO                                    0x00
 #define REG_OP_MODE                                 0x01
 #define REG_BITRATE_MSB                             0x02
@@ -130,9 +113,7 @@
 #define REG_PREAMBLE_MSB_FSK                        0x25
 #define REG_FIFO_RX_BYTE_ADDR                       0x25
 #define REG_PREAMBLE_LSB_FSK                        0x26
-// added by C. Pham
 #define REG_MODEM_CONFIG3                           0x26
-// end
 #define REG_SYNC_CONFIG                             0x27
 #define REG_SYNC_VALUE1                             0x28
 #define REG_SYNC_VALUE2                             0x29
@@ -153,9 +134,7 @@
 #define REG_SEQ_CONFIG2                             0x37
 #define REG_DETECTION_THRESHOLD                     0x37
 #define REG_TIMER_RESOL                             0x38
-// added by C. Pham
 #define REG_SYNC_WORD                               0x39
-//end
 #define REG_TIMER1_COEF                             0x39
 #define REG_TIMER2_COEF                             0x3A
 #define REG_IMAGE_CAL                               0x3B
@@ -178,42 +157,8 @@
 #define REG_FORMER_TEMP                             0x6C
 #define REG_BIT_RATE_FRAC                           0x70
 
-// added by C. Pham
-// copied from LoRaMAC-Node
-/*!
- * RegImageCal
- */
-#define RF_IMAGECAL_AUTOIMAGECAL_MASK               0x7F
-#define RF_IMAGECAL_AUTOIMAGECAL_ON                 0x80
-#define RF_IMAGECAL_AUTOIMAGECAL_OFF                0x00  // Default
 
-#define RF_IMAGECAL_IMAGECAL_MASK                   0xBF
-#define RF_IMAGECAL_IMAGECAL_START                  0x40
-
-#define RF_IMAGECAL_IMAGECAL_RUNNING                0x20
-#define RF_IMAGECAL_IMAGECAL_DONE                   0x00  // Default
-
-#define RF_IMAGECAL_TEMPCHANGE_HIGHER               0x08
-#define RF_IMAGECAL_TEMPCHANGE_LOWER                0x00
-
-#define RF_IMAGECAL_TEMPTHRESHOLD_MASK              0xF9
-#define RF_IMAGECAL_TEMPTHRESHOLD_05                0x00
-#define RF_IMAGECAL_TEMPTHRESHOLD_10                0x02  // Default
-#define RF_IMAGECAL_TEMPTHRESHOLD_15                0x04
-#define RF_IMAGECAL_TEMPTHRESHOLD_20                0x06
-
-#define RF_IMAGECAL_TEMPMONITOR_MASK                0xFE
-#define RF_IMAGECAL_TEMPMONITOR_ON                  0x00 // Default
-#define RF_IMAGECAL_TEMPMONITOR_OFF                 0x01
-
-// added by C. Pham
-// The crystal oscillator frequency of the module
-#define RH_LORA_FXOSC                               32000000.0
- 
-// The Frequency Synthesizer step = RH_LORA_FXOSC / 2^^19
-#define RH_LORA_FCONVERT                            (524288 / RH_LORA_FXOSC)
-
-
+/* Channel Frequency Values */
 #define CH_10_868                                   0xD84CCC // channel 10, central freq = 865.20MHz
 #define CH_11_868                                   0xD86000 // channel 11, central freq = 865.50MHz
 #define CH_12_868                                   0xD87333 // channel 12, central freq = 865.80MHz
@@ -238,87 +183,61 @@
 #define CH_11_900                                   0xE7B5C2 // channel 11, central freq = 926.84MHz
 #define CH_12_900                                   0xE4C000 // default channel 915MHz, the module is configured with it
 
-//LORA BANDWIDTH:
-// modified by C. Pham
-#define SX1272_BW_125 0x00
-#define SX1272_BW_250 0x01
-#define SX1272_BW_500 0x02
 
-// use the following constants with setBW()
-#define BW_7_8 0x00
-#define BW_10_4 0x01
-#define BW_15_6 0x02
-#define BW_20_8 0x03
-#define BW_31_25 0x04
-#define BW_41_7 0x05
-#define BW_62_5 0x06
-#define BW_125 0x07
-#define BW_250 0x08
-#define BW_500 0x09
-// end
+#define BW_7_8                                      0x00
+#define BW_10_4                                     0x01
+#define BW_15_6                                     0x02
+#define BW_20_8                                     0x03
+#define BW_31_25                                    0x04
+#define BW_41_7                                     0x05
+#define BW_62_5                                     0x06
+#define BW_125                                      0x07
+#define BW_250                                      0x08
+#define BW_500                                      0x09
 
 
 //LORA CODING RATE:
-#define CR_5 0x01
-#define CR_6 0x02
-#define CR_7 0x03
-#define CR_8 0x04
+#define CR_5                                        0x01
+#define CR_6                                        0x02
+#define CR_7                                        0x03
+#define CR_8                                        0x04
 
 //LORA SPREADING FACTOR:
-#define SF_6 0x06
-#define SF_7 0x07
-#define SF_8 0x08
-#define SF_9 0x09
-#define SF_10 0x0A
-#define SF_11 0x0B
-#define SF_12 0x0C
+#define SF_6                                        0x06
+#define SF_7                                        0x07
+#define SF_8                                        0x08
+#define SF_9                                        0x09
+#define SF_10                                       0x0A
+#define SF_11                                       0x0B
+#define SF_12                                       0x0C
 
 //LORA MODES:
-#define LORA_SLEEP_MODE 0x80
-#define LORA_STANDBY_MODE 0x81
-#define LORA_TX_MODE 0x83
-#define LORA_RX_MODE 0x85
+#define LORA_SLEEP_MODE                             0x80
+#define LORA_STANDBY_MODE                           0x81
+#define LORA_TX_MODE                                0x83
+#define LORA_RX_MODE                                0x85
 
-// added by C. Pham
-#define LORA_CAD_MODE 0x87
-#define LNA_MAX_GAIN                0x23
-#define LNA_OFF_GAIN                0x00
-#define LNA_LOW_GAIN            0x20
-// end
 
-#define LORA_STANDBY_FSK_REGS_MODE 0xC1
+#define LORA_CAD_MODE                               0x87
+#define LNA_MAX_GAIN                                0x23
+#define LNA_OFF_GAIN                                0x00
+#define LNA_LOW_GAIN                                0x20
+
+
+#define LORA_STANDBY_FSK_REGS_MODE                  0xC1
 
 //FSK MODES:
-#define FSK_SLEEP_MODE 0x00
-#define FSK_STANDBY_MODE 0x01
-#define FSK_TX_MODE 0x03
-#define FSK_RX_MODE 0x05
+#define FSK_SLEEP_MODE                              0x00
+#define FSK_STANDBY_MODE                            0x01
+#define FSK_TX_MODE                                 0x03
+#define FSK_RX_MODE                                 0x05
 
-//OTHER CONSTANTS:
 
-#define HEADER_ON                                   0
-#define HEADER_OFF                                  1
-#define CRC_ON                                      1
-#define CRC_OFF                                     0
-#define LORA                                        1
 #define BROADCAST_0                                 0x00
 #define MAX_LENGTH                                  255
 #define MAX_PAYLOAD                                 251
-#define MAX_LENGTH_FSK                              64
-#define MAX_PAYLOAD_FSK                             60
-
-#define ACK_LENGTH                                  7
-
 #define OFFSET_PAYLOADLENGTH                        4
-
 #define OFFSET_RSSI                                 137
-#define NOISE_FIGURE                                6.0
-#define NOISE_ABSOLUTE_ZERO                         174.0
-#define MAX_TIMEOUT                                 8000      //8000 msec 8.0 sec
-#define MAX_WAIT                                    12000        //12000 msec 12.0 sec
-#define MAX_RETRIES                                 5
-#define CORRECT_PACKET                              0
-#define INCORRECT_PACKET                            1
 
 #define PKT_TYPE_MASK                               0xF0
 #define PKT_FLAG_MASK                               0x0F
@@ -362,13 +281,9 @@ struct pack
  * Class
  ******************************************************************************/
 
-//! SX1272 Class
-/*!
-    SX1272 Class defines all the variables and functions used to manage
-    SX1272 modules.
- */
 class SX1272
 {
+
 
 public:
     ~SX1272();
@@ -387,6 +302,141 @@ public:
     */
     void OFF();
 
+
+    /**
+     * Function: Responsible for pulling the current power from the register and returns it
+     * @return current power 
+     */
+    uint8_t getPower();
+
+    /**
+     * Function: responsible for setting the output power for the antenna
+     * @param  p desired power rate
+     * @return   0 if error occurs 
+     */
+    int8_t setPower(char p);
+
+    /**
+     * Function: Gets the preamble length from the module.
+     * @return preamble length 
+     */
+    uint16_t getPreambleLength();
+
+    /**
+     *  Function: Sets the preamble length in the module
+     * @param  l desired preamble length 
+     * @return   error state
+     */
+    int8_t setPreambleLength(uint16_t l);
+
+    /**
+     * Function: returns the stored node address 
+     * @return node address
+     */
+    uint8_t getNodeAddress();
+
+    /**
+     * Function: responsible for setting up the node address
+     * @param  addr desired node addr
+     * @return      0 if error occurs
+     */
+    int8_t setNodeAddress(uint8_t addr);
+
+    /**
+     * Function: returns the SNR value 
+     * @return SNR value
+     */
+    int8_t getSNR();
+
+    /**
+     * Function: Returns a uint16_t representing the the rssi value of the most recent recieved packet
+     * @return RSSI value 
+     */
+    int16_t getRSSIpacket();
+
+
+    /**
+     * Function: Places SX1272 into RX mode 
+     * @return error state 0 if no error 
+     */
+    uint8_t receive();
+
+    /**
+     * Function: Should only be called when DIO_0 is asserted, pulls recieved packet from the registers stores it in global 
+     * @return      error state 0 if no error 
+     */
+    int8_t getPacket(void);
+
+    /**
+     * Function: Checks the IRQ register, returns 0 is the TX_DONE_Flag has been set. 
+     *         Typically read after DIO_5 is de-asserted. 
+     * @return error state
+     */
+    int8_t checkTransmissionStatus(void);
+
+    /**
+     * Function: sets up the registers and places the lora module into TX mode
+     * @param  dest    destination address
+     * @param  payload pointer to payload
+     * @param  length  length of payload
+     * @return         returns 0 if no errors 
+     */
+    int8_t sendPacket(uint8_t dest, uint8_t *payload, uint8_t length);
+
+    /**
+     * Function:  writes the desired syncword to the register
+     * @param     sw the desired sync word 
+     * @return    0 if no error occurs
+     */
+    int8_t setSyncWord(uint8_t sw);
+
+    /**
+     * Function:  places the lora module into sleep mode
+     * @return    0 if successful 
+     */
+    int8_t setSleepMode(); 
+
+
+/// MAKE PRIVATE !!!! 
+
+    /**
+     * Function:  responsible for setting up the frequency channel and writing to the registers
+     * @param     ch desired channel 
+     * @return    0 if no error occurs
+     */
+    int8_t setChannel(uint32_t ch);
+
+    /**
+     * Function: sets up the communications based on a desired LoRA mode
+     * @param  mode  desired mode
+     * @return       0 if no issue
+     */
+    int8_t setMode(uint8_t mode);
+
+    /**
+     * Function:    Sets the indicated CR in the module.
+     * @param  cod  current CR
+     * @return      0 if error occurs 
+     */
+    int8_t  setCR(uint8_t cod);
+
+
+    /**
+     * Function      responsible for writing the desired bandwidth to the resisters
+     * @param  band  desired band
+     * @return       0 if error 
+     */
+    int8_t  setBW(uint16_t band);
+
+
+    /**
+     * Function: Sets the indicated SF in the module.
+     * @param  spr [description]
+     * @return     0 if no error 
+     */
+    int8_t setSF(uint8_t spr);
+
+private:
 
     /*
      Function: Reads the indicated register.
@@ -414,6 +464,8 @@ public:
      */
     int8_t writeReadRegister(byte address, byte data);
 
+
+
     /**
      * Function: Clears the interruption flags
      * @return Nothing
@@ -426,13 +478,6 @@ public:
      * @return error state
      */
     int8_t setLORA();
-
-    /**
-     * Function: sets up the communications based on a desired LoRA mode
-     * @param  mode  desired mode
-     * @return       0 if no issue
-     */
-    int8_t setMode(uint8_t mode);
 
 
     /**
@@ -450,13 +495,6 @@ public:
 
 
     /**
-     * Function: Sets the indicated SF in the module.
-     * @param  spr [description]
-     * @return     0 if no error 
-     */
-    int8_t setSF(uint8_t spr);
-
-    /**
      * Function:   Checks if BW is a valid value.
      * @param  band desired band
      * @return      true if valid
@@ -471,20 +509,11 @@ public:
 
 
     /**
-     * Function      responsible for writing the desired bandwidth to the resisters
-     * @param  band  desired band
-     * @return       0 if error 
-     */
-    int8_t  setBW(uint16_t band);
-
-
-    /**
      *  Function: Checks if CR is a valid value.
      * @param  cod CR
      * @return     1 if valid
      */
     boolean isCR(uint8_t cod);
-
 
     /**
      *  Function: Indicates the CR within the module is configured.
@@ -494,128 +523,13 @@ public:
 
 
     /**
-     * Function:    Sets the indicated CR in the module.
-     * @param  cod  current CR
-     * @return      0 if error occurs 
-     */
-    int8_t  setCR(uint8_t cod);
-
-
-    /**
-     * Function:  responsible for setting up the frequency channel and writing to the registers
-     * @param     ch desired channel 
-     * @return    0 if no error occurs
-     */
-    int8_t setChannel(uint32_t ch);
-
-    /**
-     * Function: Responsible for pulling the current power from the register and returns it
-     * @return current power 
-     */
-    uint8_t getPower();
-
-
-    /**
-     * Function: responsible for setting the output power for the antenna
-     * @param  p desired power rate
-     * @return   0 if error occurs 
-     */
-    int8_t setPower(char p);
-
-
-    /**
-     * Function: Gets the preamble length from the module.
-     * @return preamble length 
-     */
-    uint16_t getPreambleLength();
-
-
-    /**
-     *  Function: Sets the preamble length in the module
-     * @param  l desired preamble length 
-     * @return   error state
-     */
-    int8_t setPreambleLength(uint16_t l);
-
-    /**
-     * Function: returns the stored node address 
-     * @return node address
-     */
-    uint8_t getNodeAddress();
-
-    /**
-     * Function: responsible for setting up the node address
-     * @param  addr desired node addr
-     * @return      0 if error occurs
-     */
-    int8_t setNodeAddress(uint8_t addr);
-
-
-    /**
-     * Function: returns the SNR value 
-     * @return SNR value
-     */
-    int8_t getSNR();
-
-
-    /**
-     * Function: Returns a uint16_t representing the the rssi value of the most recent recieved packet
-     * @return RSSI value 
-     */
-    int16_t getRSSIpacket();
-
-
-    /**
      * Function: sets the maximum current the SX127X device has access 
      * @param  rate current rate 
      * @return      error state 0 if no error 
      */
     int8_t setMaxCurrent(uint8_t rate);
 
-
-    /**
-     * Function: Places SX1272 into RX mode 
-     * @return error state 0 if no error 
-     */
-    uint8_t receive();
-
-    /**
-     * Function: Should only be called when DIO_0 is asserted, pulls recieved packet from the registers stores it in global 
-     * @return      error state 0 if no error 
-     */
-    int8_t getPacket(void);
-
-    /**
-     * Function: Checks the IRQ register, returns 0 is the TX_DONE_Flag has been set. 
-     *         Typically read after DIO_5 is de-asserted. 
-     * @return error state
-     */
-    int8_t checkTransmissionStatus(void);
-
-
-    /**
-     * Function: sets up the registers and places the lora module into TX mode
-     * @param  dest    destination address
-     * @param  payload pointer to payload
-     * @param  length  length of payload
-     * @return         returns 0 if no errors 
-     */
-    int8_t sendPacket(uint8_t dest, uint8_t *payload, uint8_t length);
-
-
-    /**
-     * Function:  writes the desired syncword to the register
-     * @param     sw the desired sync word 
-     * @return    0 if no error occurs
-     */
-    int8_t  setSyncWord(uint8_t sw);
-
-    /**
-     * Function:  places the lora module into sleep mode
-     * @return    0 if successful 
-     */
-    int8_t setSleepMode(); 
-
+public:
 
     pack _packet_sent;
     pack _packet_received;
@@ -624,6 +538,7 @@ public:
     uint8_t _nodeAddress; 
     uint8_t _packetNumber;
     int8_t _SNR;
+
 private:
 
     uint8_t _board;
