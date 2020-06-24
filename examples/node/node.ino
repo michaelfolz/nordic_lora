@@ -20,9 +20,9 @@
  */
  // and SPI library on Arduino platforms
 #include <SPI.h>
-// Include the SX1272
+// Include the sx127X
 #include "SX1272.h"
-SX1272 sx1272 = SX1272();
+SX127X sx127X = SX127X();
 
 
 #define GATEWAY_DESTINATION_ADDR 1
@@ -33,10 +33,10 @@ unsigned long lastTransmissionTime=0;
 unsigned long delayBeforeTransmit=0;
 uint8_t message[100];
 
-const byte interruptPin = 2;
+#define SX127X_TX_INTERRUPT_PIN  2
+#define SX127X_RX_INTERRUPT_PIN  3
 
-
-
+volatile uint8_t rx_packet =0 ;
 volatile SX127X_TX_Packet_States tx_state =TX_NONE; 
 
 void setup()
@@ -55,21 +55,25 @@ void setup()
     Serial.println(F("SX1272 module and Arduino: send packets without ACK"));
 
     // Power ON the module
-    error = sx1272.ON();
+    error = sx127X.ON();
     if(error !=0)
     {
          Serial.println(F("issues setting up the SX127X module"));
     }
 
     // Set the node address and print the result
-    error = sx1272.setNodeAddress(NODE_ADDRESS);
+    error = sx127X.setNodeAddress(NODE_ADDRESS);
     Serial.print(F("Setting node addr: state "));
 
     // Print a success message
-    Serial.println(F("SX1272 successfully configured"));
+    Serial.println(F("sx127X successfully configured"));
 
-    pinMode(interruptPin, INPUT_PULLUP);
-    attachInterrupt(digitalPinToInterrupt(interruptPin), blink, FALLING);
+    pinMode(SX127X_TX_INTERRUPT_PIN, INPUT);
+    attachInterrupt(digitalPinToInterrupt(SX127X_TX_INTERRUPT_PIN), LoRA_TX_Interrupt_Routine, FALLING);
+
+    pinMode(SX127X_RX_INTERRUPT_PIN, INPUT);
+    attachInterrupt(digitalPinToInterrupt(SX127X_RX_INTERRUPT_PIN), LoRA_RX_Interrupt_Routine, RISING);
+
 
     tx_state = TX_NONE; 
 
@@ -77,6 +81,7 @@ void setup()
 }
 
 
+char sprintf_buf[100];
 
 void loop(void)
 {
@@ -84,6 +89,10 @@ void loop(void)
     long endSend;
     uint8_t app_key_offset=0;
     int e;
+    uint8_t tmp_length;
+    int16_t rssi_packet = 0;
+    int8_t SNR; 
+
 
     // wait to send out next packet 
     if (millis()-lastTransmissionTime > delayBeforeTransmit)
@@ -91,14 +100,13 @@ void loop(void)
         startSend=millis();
         endSend=millis();  
         lastTransmissionTime=millis();
-        delayBeforeTransmit=1000+random(15,60)*100;
+        delayBeforeTransmit=4000+random(15,60)*100;
         tx_state = TX_REQUEST_SEND; 
     }
 
-
     if (tx_state == TX_REQUEST_SEND)
     {
-
+      //  sx127X.setTX(); 
         uint8_t r_size;
         static uint16_t counter =0;
         r_size=sprintf((char*)message, "%04d testing packet 0x%x",counter, counter++);  
@@ -115,26 +123,66 @@ void loop(void)
 
         // Send message to the gateway and print the result
         // with the app key if this feature is enabled
-        e = sx1272.sendPacket(GATEWAY_DESTINATION_ADDR, message, r_size);
+        e = sx127X.sendPacket(GATEWAY_DESTINATION_ADDR, message, r_size);
         if(e != 0)
-            tx_state = TX_ERROR;
+        {
+           tx_state = TX_ERROR;
+           sprintf((char*)message, "Error sending paket error 0x%x",e);  
+           Serial.println((char*)(message));
+        }
     }
 
     if(tx_state == TX_COMPLETE)
     {
           Serial.print(F("DONE "));
+          sx127X.receive();
+      //    delay(1500);
+      
          tx_state = TX_NONE; 
     }
 
     if(tx_state == TX_ERROR)
     {
-          Serial.print(F("ERROR "));
+        //  Serial.print(F("ERROR "));
          tx_state = TX_NONE; 
     }
 
+      if (rx_packet) 
+      {
+          sx127X.getPacket();
+          rx_packet = 0;
+
+          // pull packet from FIFO
+          rssi_packet = sx127X.getRSSIpacket();
+          SNR = sx127X.getSNR();
+          tmp_length = sx127X._payloadlength;
+
+          sprintf(sprintf_buf,"\n --- rxlora. dst=%d type=0x%.2X src=%d seq=%d len=%d SNR=%d RSSIpkt=%d\n", 
+                 sx127X._packet_received.dst,
+                 sx127X._packet_received.type, 
+                 sx127X._packet_received.src,
+                 sx127X._packet_received.packnum,
+                 tmp_length, 
+                 SNR,
+                 rssi_packet);
+          Serial.print(sprintf_buf);
+      }
+      
+
+
 }
+
    
-void blink() {
+
+void LoRA_RX_Interrupt_Routine() 
+{
+    uint8_t error =0;
+    // If packet received, getPacket
+    Serial.print("\nReceived Packet: ");
+     rx_packet = 1; 
+}
+
+void LoRA_TX_Interrupt_Routine() {
     uint8_t error =0;
     Serial.println("tx packet."); 
     Serial.print(tx_state);
@@ -149,7 +197,7 @@ void blink() {
 
         case TX_IN_TRANSMISSION: 
         {
-            error = sx1272.checkTransmissionStatus(); 
+            error = sx127X.checkTransmissionStatus(); 
             if(error ==0)
             {
                 tx_state = TX_COMPLETE;
@@ -161,10 +209,7 @@ void blink() {
 
             break;
         }
-
-
-    }
-          
+    }    
 }
 
 
