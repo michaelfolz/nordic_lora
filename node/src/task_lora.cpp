@@ -49,14 +49,22 @@ void lora_task_function(void * pvParameter)
     error = sx127X.setNodeAddress(NODE_ADDRESS);
     sw_spi_send_packet("Setting node addr: state ", 25);
 
+uint16_t counter =0; 
+  uint8_t r_size;
+uint8_t message[100];
     while (true)
     {
         /* Delay a task for a given number of ticks */
-        nrf_gpio_pin_set(31);
-        vTaskDelay(100);
-        nrf_gpio_pin_clear(31);
 
-        vTaskDelay(100);
+      
+        r_size=sprintf((char*)message, "%04d testing packet 0x%x",counter, counter++);  
+
+
+        // Send message to the gateway and print the result
+        // with the app key if this feature is enabled
+         sx127X.sendPacket(GATEWAY_DESTINATION_ADDR, message, r_size);
+    
+          vTaskDelay(10000);
         /* Tasks must be implemented to never return... */
     }
 

@@ -52,7 +52,7 @@ uint8_t sx127x_print_error(const char *message, uint8_t length)
 
 uint8_t spi_txrx_byte(uint8_t data)
 { 
-    const uint8_t tx_buffer[2] = {data, data};
+    const uint8_t tx_buffer[2] = {data, 0x00};
     uint8_t rx_buffer[2];
     ret_code_t error; 
 
@@ -132,7 +132,8 @@ uint8_t SX127X::ON()
     delay_ms(10);
     gpio_write(SX127X_RST,LOW);
     delay_ms(10);
-
+        gpio_write(SX127X_RST,HIGH);
+    delay_ms(10);
     // Read Version 
     version = readRegister(REG_VERSION);
     switch(version)

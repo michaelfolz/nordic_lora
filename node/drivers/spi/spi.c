@@ -5,7 +5,7 @@
 #define SPI_SCK_PIN                                 NRF_GPIO_PIN_MAP(1,15)
 #define SPI_MISO_PIN                                NRF_GPIO_PIN_MAP(1,14)
 #define SPI_MOSI_PIN                                NRF_GPIO_PIN_MAP(1,13)
-#define SPI_SS_PIN                                  NRF_GPIO_PIN_MAP(1,10)
+#define SPI_SS_PIN                                  NRF_DRV_SPI_PIN_NOT_USED
     
 static const nrf_drv_spi_t spi = NRF_DRV_SPI_INSTANCE(SPI_INSTANCE);  /**< SPI instance. */
 
