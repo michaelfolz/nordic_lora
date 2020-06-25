@@ -1,31 +1,53 @@
 #include "task_lora.h"
 
+#include "SX1272.h"
+#include "sw_spi.h"
+
+
 #define TASK_DELAY        2000         
 
-int16_t lora_tx_interrupt(void)
+SX127X sx127X = SX127X();
+
+#define GATEWAY_DESTINATION_ADDR 1
+#define NODE_ADDRESS 6
+
+
+void lora_tx_interrupt(void)
 {
    sw_spi_send_packet("pin1", 4);
-    return 1;
+    return;
 }
 
 
-int16_t lora_rx_interrupt(void)
+void lora_rx_interrupt(void)
 {
     sw_spi_send_packet("pin2", 4);
-    return 1;
+    return;
 }
 
 void lora_task_function(void * pvParameter)
 {
+    uint16_t error; 
     UNUSED_PARAMETER(pvParameter);
 	
-    gpio_init();
+    void (*tx_int)() = &lora_tx_interrupt; 
+    void (*rx_int)() = &lora_rx_interrupt; 
+
+   // gpio_init(tx_int, rx_int);
     spi_init(false);
 
     nrf_gpio_cfg_output(31);
 
+    error = sx127X.ON();
+    if(error !=0)
+    {
+        sw_spi_send_packet("issues setting up the SX127X module", 35);
+    }
 
 
+    // Set the node address and print the result
+    error = sx127X.setNodeAddress(NODE_ADDRESS);
+    sw_spi_send_packet("Setting node addr: state ", 25);
 
     while (true)
     {

@@ -109,6 +109,8 @@ SRC_FILES += \
   $(PROJECT_DIR)/drivers/spi/spi.c \
   $(PROJECT_DIR)/drivers/sw_spi/sw_spi.c \
   $(PROJECT_DIR)/drivers/gpioe/gpioe.c \
+  $(PROJECT_DIR)/drivers/error/error.c \
+  $(PROJECT_DIR)/drivers/sx127x/SX1272.cpp \
   $(PROJECT_DIR)/src/main.cpp \
   $(PROJECT_DIR)/src/task_led.cpp \
   $(PROJECT_DIR)/src/task_control.cpp \
@@ -252,6 +254,8 @@ INC_FOLDERS += \
   $(PROJECT_DIR)/drivers/spi/ \
   $(PROJECT_DIR)/drivers/sw_spi/ \
   $(PROJECT_DIR)/drivers/gpioe/ \
+  $(PROJECT_DIR)/drivers/error/ \
+  $(PROJECT_DIR)/drivers/sx127x/ \
   $(SDK_ROOT)/components/softdevice/mbr/nrf52840/headers \
   $(SDK_ROOT)/components/libraries/strerror \
   $(SDK_ROOT)/components/libraries/util \

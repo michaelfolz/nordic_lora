@@ -19,14 +19,14 @@
 #include "app_error.h"
 #include "boards.h"
 
-#include "error.h"
+#include "sw_spi.h"
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
 
-	void gpio_init(void (*tx_function)(), void (*rx_function)());
+	void error_panic(char *data, unsigned char length);
 
 #ifdef __cplusplus
 }
